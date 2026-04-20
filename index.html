@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://script.google.com https://script.googleusercontent.com;">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrackR — Portfolio Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0a0d14;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e2e8f0;min-height:100vh;}
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem;}
+.auth-box{background:#161b26;border:1px solid #2a2f3e;border-radius:14px;padding:2rem 2rem 1.75rem;width:100%;max-width:400px;}
+.auth-logo{font-size:22px;font-weight:700;color:#f0b429;letter-spacing:0.5px;margin-bottom:0.25rem;}
+.auth-sub{font-size:13px;color:#7c8db5;margin-bottom:1.75rem;}
+.auth-tabs{display:flex;margin-bottom:1.5rem;border-bottom:1px solid #2a2f3e;}
+.auth-tab{padding:8px 0;font-size:13px;font-weight:500;cursor:pointer;color:#7c8db5;border-bottom:2px solid transparent;margin-bottom:-1px;flex:1;text-align:center;background:none;border-left:none;border-right:none;border-top:none;transition:color 0.15s;}
+.auth-tab.active{color:#f0b429;border-bottom:2px solid #f0b429;}
+.auth-form{display:none;}
+.auth-form.active{display:block;}
+.field{margin-bottom:1rem;}
+.field label{display:block;font-size:11px;color:#7c8db5;font-weight:500;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;}
+.field input{width:100%;padding:10px 12px;border:1px solid #2a2f3e;border-radius:8px;background:#0f1117;color:#e2e8f0;font-size:14px;outline:none;transition:border-color 0.15s;}
+.field input:focus{border-color:#f0b429;}
+.auth-btn{width:100%;padding:11px;border-radius:8px;background:#f0b429;color:#0f1117;font-size:14px;font-weight:600;border:none;cursor:pointer;transition:background 0.15s;margin-top:0.25rem;}
+.auth-btn:hover:not(:disabled){background:#d99e20;}
+.auth-btn:disabled{opacity:0.5;cursor:not-allowed;}
+.auth-err{background:#2d1418;border:1px solid #3d1a1e;border-radius:8px;padding:10px 12px;font-size:12px;color:#f04e59;margin-bottom:1rem;display:none;line-height:1.5;}
+.auth-ok{background:#132a1d;border:1px solid #1e4a2e;border-radius:8px;padding:10px 12px;font-size:12px;color:#22c87a;margin-bottom:1rem;display:none;line-height:1.5;}
+.demo-btn{width:100%;padding:10px;border-radius:8px;background:transparent;color:#7c8db5;font-size:13px;border:1px solid #2a2f3e;cursor:pointer;margin-top:0.75rem;transition:all 0.15s;}
+.demo-btn:hover{background:#1e2435;color:#c0cadf;}
+.otp-row{display:flex;gap:8px;justify-content:center;margin-bottom:1rem;}
+.otp-row input{width:44px;height:50px;text-align:center;font-size:20px;font-weight:500;border:1px solid #2a2f3e;border-radius:8px;background:#0f1117;color:#e2e8f0;outline:none;transition:border-color 0.15s;}
+.otp-row input:focus{border-color:#f0b429;}
+.resend-link{font-size:12px;color:#7c8db5;text-align:center;margin-bottom:1rem;}
+.resend-link span{color:#f0b429;cursor:pointer;}
+.resend-link span:hover{text-decoration:underline;}
+.app-shell{display:none;}
+.topbar{background:#161b26;border-bottom:1px solid #2a2f3e;padding:0 1.5rem;display:flex;align-items:center;position:sticky;top:0;z-index:100;}
+.logo{font-size:15px;font-weight:700;color:#f0b429;letter-spacing:0.5px;padding:14px 0;margin-right:2rem;white-space:nowrap;}
+.nav-btn{padding:14px 16px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:transparent;color:#7c8db5;border-bottom:2px solid transparent;transition:color 0.15s;white-space:nowrap;}
+.nav-btn:hover{color:#c0cadf;}
+.nav-btn.active{color:#f0b429;border-bottom:2px solid #f0b429;}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.user-chip{font-size:11px;color:#7c8db5;display:flex;align-items:center;gap:6px;}
+.user-dot{width:7px;height:7px;border-radius:50%;background:#22c87a;flex-shrink:0;}
+.demo-chip{background:#2a1e0d;border:1px solid #f0a42940;color:#f0a429;font-size:11px;padding:3px 9px;border-radius:20px;}
+.signout-btn{font-size:12px;color:#7c8db5;background:none;border:1px solid #2a2f3e;border-radius:6px;padding:5px 10px;cursor:pointer;transition:all 0.15s;}
+.signout-btn:hover{background:#1e2435;color:#c0cadf;}
+.content{padding:1.5rem;max-width:1200px;margin:0 auto;}
+.page{display:none;}
+.page.active{display:block;}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:1.25rem;}
+.metric{background:#161b26;border:1px solid #2a2f3e;border-radius:10px;padding:14px 16px;}
+.metric-label{font-size:11px;color:#7c8db5;margin-bottom:6px;display:flex;align-items:center;gap:5px;text-transform:uppercase;letter-spacing:0.4px;}
+.metric-value{font-size:20px;font-weight:500;color:#e2e8f0;}
+.metric-value.pos{color:#22c87a;}
+.metric-value.neg{color:#f04e59;}
+.metric-sub{font-size:11px;color:#7c8db5;margin-top:3px;}
+.card{background:#161b26;border:1px solid #2a2f3e;border-radius:10px;padding:1.25rem;margin-bottom:1rem;}
+.card-title{font-size:12px;font-weight:500;color:#7c8db5;margin-bottom:1rem;text-transform:uppercase;letter-spacing:0.4px;}
+.section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px;}
+.table-wrap{overflow-x:auto;}
+table{width:100%;font-size:12px;border-collapse:collapse;}
+th{text-align:left;font-weight:500;color:#7c8db5;padding:8px;border-bottom:1px solid #2a2f3e;font-size:11px;white-space:nowrap;text-transform:uppercase;letter-spacing:0.3px;}
+td{padding:10px 8px;border-bottom:1px solid #1e2435;color:#c8d3e8;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#1a2030;}
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:500;}
+.b-ibkr{background:#1a2d4a;color:#6baed6;}
+.b-moomoo{background:#162d1e;color:#4caf7d;}
+.b-buy{background:#132a1d;color:#22c87a;}
+.b-sell{background:#2d1418;color:#f04e59;}
+.b-sgx{background:#2a1e0d;color:#f0a429;}
+.b-us{background:#131d30;color:#6baed6;}
+.b-hkg{background:#2a1220;color:#d47fa0;}
+.pos{color:#22c87a;}
+.neg{color:#f04e59;}
+.muted{color:#7c8db5;}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin-bottom:1rem;}
+.form-group{display:flex;flex-direction:column;gap:5px;}
+.form-group label{font-size:11px;color:#7c8db5;font-weight:500;text-transform:uppercase;letter-spacing:0.4px;}
+.form-group input,.form-group select{padding:9px 11px;border:1px solid #2a2f3e;border-radius:8px;background:#0f1117;color:#e2e8f0;font-size:13px;outline:none;transition:border-color 0.15s;}
+.form-group input:focus,.form-group select:focus{border-color:#f0b429;}
+.form-group select option{background:#161b26;}
+.fx-note{font-size:11px;color:#7c8db5;margin-top:2px;line-height:1.4;}
+.fee-box{background:#0f1117;border:1px solid #2a2f3e;border-radius:8px;padding:12px 14px;margin-bottom:1rem;}
+.fee-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px;}
+.fee-row.total{border-top:1px solid #2a2f3e;margin-top:6px;padding-top:8px;font-weight:500;color:#e2e8f0;}
+.fee-lbl{color:#7c8db5;}
+.btn{padding:8px 16px;border-radius:8px;font-size:12px;cursor:pointer;border:1px solid #2a2f3e;background:transparent;color:#c0cadf;transition:all 0.15s;white-space:nowrap;}
+.btn:hover:not(:disabled){background:#1e2435;border-color:#3a4055;}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-gold{background:#f0b429;color:#0f1117;border-color:#f0b429;font-weight:600;}
+.btn-gold:hover:not(:disabled){background:#d99e20;}
+.btn-danger{color:#f04e59;border-color:#3d1a1e;}
+.btn-danger:hover:not(:disabled){background:#2d1418;}
+.btn-sm{padding:5px 11px;font-size:11px;}
+.btn-outline-gold{border-color:#f0b42960;color:#f0b429;}
+.btn-outline-gold:hover{background:#f0b42915;}
+.modal-overlay{display:none;background:rgba(0,0,0,0.75);padding:1.5rem;margin-bottom:1rem;border-radius:10px;}
+.modal-overlay.open{display:flex;align-items:flex-start;justify-content:center;}
+.modal-box{background:#161b26;border:1px solid #2a2f3e;border-radius:12px;padding:1.5rem;width:100%;max-width:680px;}
+.modal-title{font-size:14px;font-weight:500;color:#e2e8f0;margin-bottom:1.25rem;}
+.login-prompt{background:#1a1e2e;border:1px solid #f0b42940;border-radius:10px;padding:1.25rem;margin-bottom:1rem;display:none;}
+.login-prompt.show{display:block;}
+.login-prompt-title{font-size:13px;font-weight:600;color:#f0b429;margin-bottom:0.5rem;}
+.login-prompt p{font-size:12px;color:#7c8db5;margin-bottom:1rem;line-height:1.6;}
+.demo-banner{background:#1e1608;border:1px solid #f0a42930;border-radius:8px;padding:12px 16px;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+.demo-banner p{font-size:12px;color:#c8943a;line-height:1.5;}
+.demo-banner-btns{display:flex;gap:8px;flex-shrink:0;}
+.refresh-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.refresh-status{font-size:11px;color:#7c8db5;}
+.spin{display:inline-block;animation:spin 0.9s linear infinite;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.fx-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 0 4px;}
+.fx-bar span{font-size:12px;color:#7c8db5;display:flex;align-items:center;gap:6px;}
+.fx-bar input{width:68px;padding:5px 8px;font-size:12px;border:1px solid #2a2f3e;border-radius:6px;background:#0f1117;color:#e2e8f0;outline:none;}
+.fx-bar input:focus{border-color:#f0b429;}
+.price-input-grid{display:flex;flex-wrap:wrap;gap:10px;}
+.chart-container{position:relative;height:240px;}
+.empty-state{text-align:center;padding:2.5rem;color:#7c8db5;font-size:13px;}
+.loading-inline{color:#7c8db5;font-size:13px;padding:1.5rem;text-align:center;}
+.tooltip-wrap{position:relative;display:inline-flex;align-items:center;}
+.info-icon{width:14px;height:14px;border-radius:50%;border:1px solid #7c8db5;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:#7c8db5;cursor:pointer;margin-left:4px;}
+.info-icon:hover{border-color:#f0b429;color:#f0b429;}
+.tooltip-pop{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e2840;border:1px solid #3a4055;border-radius:8px;padding:10px 12px;width:280px;font-size:11px;color:#c0cadf;z-index:200;line-height:1.6;}
+.tooltip-pop table{width:100%;font-size:11px;}
+.tooltip-pop th{color:#7c8db5;padding:3px 4px;font-size:10px;text-transform:uppercase;border-bottom:none;}
+.tooltip-pop td{color:#c0cadf;padding:3px 4px;border-bottom:1px solid #2a2f3e;}
+.tooltip-pop tr:last-child td{border:none;}
+.info-icon:hover + .tooltip-pop,.tooltip-pop:hover{display:block;}
+@media(max-width:600px){
+  .topbar{overflow-x:auto;}
+  .nav-btn{padding:14px 11px;font-size:12px;}
+  .metrics-grid{grid-template-columns:1fr 1fr;}
+  .form-grid{grid-template-columns:1fr 1fr;}
+  .auth-box{padding:1.5rem 1.25rem;}
+}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-wrap" class="auth-wrap">
+  <div class="auth-box">
+    <div class="auth-logo">TrackR</div>
+    <div class="auth-sub">Personal portfolio tracker</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchTab('login')">Sign in</button>
+      <button class="auth-tab" onclick="switchTab('signup')">Create account</button>
+    </div>
+
+    <div id="form-login" class="auth-form active">
+      <div id="login-err" class="auth-err"></div>
+      <div id="login-ok" class="auth-ok"></div>
+      <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@email.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="field"><label>Password</label><input type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="auth-btn" id="login-btn" onclick="doLogin()">Sign in</button>
+      <button class="demo-btn" onclick="enterDemo()">Preview with demo data — no account needed</button>
+    </div>
+
+    <div id="form-signup" class="auth-form">
+      <div id="signup-err" class="auth-err"></div>
+      <div id="signup-ok" class="auth-ok"></div>
+      <div class="field"><label>Email</label><input type="email" id="signup-email" placeholder="you@email.com"></div>
+      <div class="field"><label>Password <span style="color:#7c8db5;font-weight:400;font-size:10px;text-transform:none;">(min 8 characters)</span></label><input type="password" id="signup-pw" placeholder="••••••••"></div>
+      <div class="field"><label>Confirm password</label><input type="password" id="signup-pw2" placeholder="••••••••" onkeydown="if(event.key==='Enter')doSignup()"></div>
+      <button class="auth-btn" id="signup-btn" onclick="doSignup()">Create account</button>
+    </div>
+
+    <div id="form-otp" class="auth-form">
+      <div id="otp-err" class="auth-err"></div>
+      <div id="otp-ok" class="auth-ok"></div>
+      <p style="font-size:13px;color:#7c8db5;margin-bottom:1.25rem;line-height:1.6;">A 6-digit code was sent to <strong style="color:#e2e8f0" id="otp-email-label"></strong>. Enter it below to verify your email.</p>
+      <div class="otp-row">
+        <input type="text" inputmode="numeric" maxlength="1" id="otp0" oninput="otpIn(0)" onkeydown="otpKey(0,event)">
+        <input type="text" inputmode="numeric" maxlength="1" id="otp1" oninput="otpIn(1)" onkeydown="otpKey(1,event)">
+        <input type="text" inputmode="numeric" maxlength="1" id="otp2" oninput="otpIn(2)" onkeydown="otpKey(2,event)">
+        <input type="text" inputmode="numeric" maxlength="1" id="otp3" oninput="otpIn(3)" onkeydown="otpKey(3,event)">
+        <input type="text" inputmode="numeric" maxlength="1" id="otp4" oninput="otpIn(4)" onkeydown="otpKey(4,event)">
+        <input type="text" inputmode="numeric" maxlength="1" id="otp5" oninput="otpIn(5)" onkeydown="otpKey(5,event)">
+      </div>
+      <button class="auth-btn" id="otp-btn" onclick="verifyOTP()">Verify and sign in</button>
+      <div class="resend-link" style="margin-top:0.75rem;">Didn't receive it? <span onclick="resendOTP()">Resend code</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-shell" class="app-shell">
+  <div class="topbar">
+    <span class="logo">TrackR</span>
+    <button class="nav-btn active" onclick="showPage('dashboard',this)">Portfolio</button>
+    <button class="nav-btn" onclick="showPage('add-trade',this)">+ New trade</button>
+    <button class="nav-btn" onclick="showPage('history',this)">History</button>
+    <div class="topbar-right">
+      <span id="demo-chip" class="demo-chip" style="display:none;">Demo</span>
+      <span class="user-chip"><div class="user-dot"></div><span id="user-email-disp" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span></span>
+      <button class="signout-btn" onclick="doSignOut()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div id="demo-banner" class="demo-banner" style="display:none;">
+        <p>You're previewing TrackR with 5 sample trades. Sign in or create a free account to track your real portfolio.</p>
+        <div class="demo-banner-btns">
+          <button class="btn btn-sm btn-outline-gold" onclick="goToAuth('signup')">Create account</button>
+          <button class="btn btn-sm btn-danger" onclick="resetDemo()">Reset demo</button>
+        </div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric"><div class="metric-label">Total cost (SGD)</div><div class="metric-value" id="m-invested">—</div><div class="metric-sub" id="m-positions">—</div></div>
+        <div class="metric"><div class="metric-label">Market value (SGD)</div><div class="metric-value" id="m-mktval">—</div><div class="metric-sub">at current FX</div></div>
+        <div class="metric"><div class="metric-label">Total P&amp;L (SGD)</div><div class="metric-value" id="m-pnl">—</div><div class="metric-sub" id="m-pnlpct">—</div></div>
+        <div class="metric"><div class="metric-label">FX gain / loss</div><div class="metric-value" id="m-fx">—</div><div class="metric-sub">vs trade-date FX</div></div>
+        <div class="metric">
+          <div class="metric-label">Total fees (SGD)
+            <div class="tooltip-wrap"><div class="info-icon">i</div>
+              <div class="tooltip-pop"><div style="font-weight:500;color:#e2e8f0;margin-bottom:6px;">Fee reference</div>
+                <table>
+                  <tr><th colspan="2">SGX — IBKR</th></tr>
+                  <tr><td>Commission</td><td>0.08% (min SGD 2.50)</td></tr>
+                  <tr><td>Trading fee</td><td>0.0075%</td></tr>
+                  <tr><td>Clearing fee</td><td>0.0325%</td></tr>
+                  <tr><td>MAS levy</td><td>0.001%</td></tr>
+                  <tr><td>GST</td><td>9% on commission</td></tr>
+                  <tr><th colspan="2" style="padding-top:6px;">SGX — Moomoo</th></tr>
+                  <tr><td>Commission</td><td>0.03% (min SGD 0.99)</td></tr>
+                  <tr><td>Platform fee</td><td>0.03% (min SGD 0.99)</td></tr>
+                  <tr><th colspan="2" style="padding-top:6px;">US — IBKR</th></tr>
+                  <tr><td>Commission</td><td>USD 0.005/share (min 1)</td></tr>
+                  <tr><td>SEC fee (sells)</td><td>0.00278% of gross</td></tr>
+                  <tr><th colspan="2" style="padding-top:6px;">US — Moomoo</th></tr>
+                  <tr><td>Commission</td><td>Free</td></tr>
+                  <tr><td>Platform fee</td><td>USD 0.0049/share</td></tr>
+                  <tr><th colspan="2" style="padding-top:6px;">HKG — both</th></tr>
+                  <tr><td>Stamp duty</td><td>0.1% both sides</td></tr>
+                  <tr><td>HKEX fee</td><td>0.005%</td></tr>
+                  <tr><td>SFC levy</td><td>0.0027%</td></tr>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="metric-value" id="m-fees">—</div>
+          <div class="metric-sub">all platforms</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-hdr">
+          <span class="card-title" style="margin:0">Positions</span>
+          <div class="refresh-row">
+            <button class="btn btn-sm" onclick="refreshPrices()">↻ Refresh prices</button>
+            <span class="refresh-status" id="refresh-status">Not yet fetched</span>
+          </div>
+        </div>
+        <div class="fx-bar">
+          <span>Current FX (to SGD):</span>
+          <span>USD/SGD <input type="number" id="fx-usd" value="1.34" step="0.001" oninput="renderDashboard()"></span>
+          <span>HKD/SGD <input type="number" id="fx-hkd" value="0.172" step="0.001" oninput="renderDashboard()"></span>
+        </div>
+        <div class="table-wrap" style="margin-top:12px;">
+          <table>
+            <thead><tr><th>Symbol</th><th>Mkt</th><th>Qty</th><th>Avg cost</th><th>Last price</th><th>Mkt val (SGD)</th><th>P&amp;L (SGD)</th><th>P&amp;L %</th><th>FX gain/loss</th></tr></thead>
+            <tbody id="pos-tbody"><tr><td colspan="9" class="loading-inline"><span class="spin">↻</span> Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Manual price update</div>
+        <div class="price-input-grid" id="price-inputs"><span class="muted" style="font-size:13px;">Add trades to see inputs.</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">P&amp;L by position (SGD)</div>
+        <div class="chart-container"><canvas id="pnlChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ADD TRADE -->
+    <div id="page-add-trade" class="page">
+      <div id="edit-modal" class="modal-overlay">
+        <div class="modal-box">
+          <div class="modal-title">Edit trade</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Action</label><select id="e-action" onchange="updateEditFees()"><option value="buy">Buy</option><option value="sell">Sell</option></select></div>
+            <div class="form-group"><label>Platform</label><select id="e-platform" onchange="updateEditFees()"><option value="ibkr">IBKR</option><option value="moomoo">Moomoo</option></select></div>
+            <div class="form-group"><label>Market</label><select id="e-market" onchange="updateEditFees()"><option value="sgx">SGX</option><option value="us">US</option><option value="hkg">HKG</option></select></div>
+            <div class="form-group"><label>Symbol</label><input type="text" id="e-symbol" onkeyup="updateEditFees()"></div>
+            <div class="form-group"><label>Quantity</label><input type="number" id="e-qty" oninput="updateEditFees()"></div>
+            <div class="form-group"><label>Price</label><input type="number" id="e-price" step="0.001" oninput="updateEditFees()"></div>
+            <div class="form-group"><label>Date</label><input type="date" id="e-date"></div>
+            <div class="form-group"><label>Time</label><input type="time" id="e-time"></div>
+            <div class="form-group"><label>Currency</label><select id="e-currency"><option value="SGD">SGD</option><option value="USD">USD</option><option value="HKD">HKD</option></select></div>
+            <div class="form-group"><label>FX rate at trade (to SGD)</label><input type="number" id="e-fx" step="0.0001" placeholder="e.g. 1.3400"><div class="fx-note">1 unit of currency = ? SGD</div></div>
+          </div>
+          <div class="fee-box" id="e-fee-preview"><div class="fee-row"><span class="fee-lbl">Enter details to see fees</span></div></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-gold" id="save-edit-btn" onclick="saveEdit()">Save changes</button>
+            <button class="btn" onclick="closeModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">New trade</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Action</label><select id="t-action" onchange="updateFees()"><option value="buy">Buy</option><option value="sell">Sell</option></select></div>
+          <div class="form-group"><label>Platform</label><select id="t-platform" onchange="updateFees()"><option value="ibkr">Interactive Brokers (IBKR)</option><option value="moomoo">Moomoo</option></select></div>
+          <div class="form-group"><label>Market</label><select id="t-market" onchange="updateFees()"><option value="sgx">SGX (Singapore)</option><option value="us">US (NYSE / NASDAQ)</option><option value="hkg">HKG (HKEX)</option></select></div>
+          <div class="form-group"><label>Stock symbol</label><input type="text" id="t-symbol" placeholder="e.g. D05, AAPL, 0700" onkeyup="updateFees()"></div>
+          <div class="form-group"><label>Quantity</label><input type="number" id="t-qty" placeholder="100" oninput="updateFees()"></div>
+          <div class="form-group"><label>Price per share</label><input type="number" id="t-price" placeholder="3.50" step="0.001" oninput="updateFees()"></div>
+          <div class="form-group"><label>Date</label><input type="date" id="t-date"></div>
+          <div class="form-group"><label>Time</label><input type="time" id="t-time"></div>
+          <div class="form-group"><label>Currency</label><select id="t-currency"><option value="SGD">SGD</option><option value="USD">USD</option><option value="HKD">HKD</option></select></div>
+          <div class="form-group">
+            <label>FX rate at trade (to SGD)</label>
+            <input type="number" id="t-fx" step="0.0001" placeholder="e.g. 1.3400" oninput="updateFees()">
+            <div class="fx-note">How many SGD = 1 unit of trade currency. Enter 1 for SGD trades.</div>
+          </div>
+        </div>
+        <div class="card-title" style="margin-bottom:0.6rem;">Fee breakdown</div>
+        <div class="fee-box" id="fee-preview"><div class="fee-row"><span class="fee-lbl">Enter quantity and price to see fees</span></div></div>
+
+        <div id="login-prompt" class="login-prompt">
+          <div class="login-prompt-title">Sign in to save this trade</div>
+          <p>You're in demo mode. Create a free account or sign in to record this trade to your personal portfolio. Your inputs above will be kept.</p>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-gold btn-sm" onclick="goToAuth('login')">Sign in</button>
+            <button class="btn btn-sm btn-outline-gold" onclick="goToAuth('signup')">Create account</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button class="btn btn-gold" id="submit-btn" onclick="submitTrade()">Record trade</button>
+          <button class="btn" onclick="clearForm()">Clear</button>
+          <span id="submit-status" style="font-size:12px;color:#7c8db5;"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div id="page-history" class="page">
+      <div class="card">
+        <div class="section-hdr">
+          <span class="card-title" style="margin:0">Trade history</span>
+          <button class="btn btn-sm" onclick="exportCSV()">Export CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date / Time</th><th>Action</th><th>Symbol</th><th>Mkt</th><th>Platform</th><th>Qty</th><th>Price</th><th>Gross</th><th>Fees</th><th>FX rate</th><th>Total (SGD)</th><th>Actions</th></tr></thead>
+            <tbody id="hist-tbody"><tr><td colspan="12" class="loading-inline"><span class="spin">↻</span> Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SURL='https://ulpdogrjiyttfqyudvbc.supabase.co';
+const SKEY='sb_publishable_QZF6AO7AOhh7i4uH_I0jJg_EqR9DXIK';
+const {createClient}=supabase;
+const db=createClient(SURL,SKEY);
+
+let trades=[],currentPrices={},editingId=null,pnlChart=null,isDemo=false,currentUser=null,pendingEmail='',pendingPassword='';
+
+// ── Fee engine ──
+function calcFees(platform,market,action,qty,price){
+  const g=qty*price;let f={};
+  if(market==='sgx'){
+    const c=platform==='ibkr'?Math.max(g*0.0008,2.50):Math.max(g*0.0003,0.99);
+    const pf=platform==='moomoo'?Math.max(g*0.0003,0.99):0;
+    f={Commission:c,...(pf>0?{'Platform fee':pf}:{}),'SGX trading fee':g*0.000075,'SGX clearing fee':g*0.000325,'MAS levy':g*0.00001,'GST (9%)':(c+pf)*0.09};
+  }else if(market==='us'){
+    const c=platform==='ibkr'?Math.max(qty*0.005,1.00):0;
+    const pf=platform==='moomoo'?Math.max(qty*0.0049,0.99):0;
+    f={Commission:c,...(pf>0?{'Platform fee':pf}:{})};
+    if(action==='sell'){f['SEC fee']=g*0.0000278;f['FINRA TAF']=Math.min(qty*0.000145,7.27);}
+  }else{
+    const c=platform==='ibkr'?Math.max(g*0.0008,18):Math.max(g*0.0003,3);
+    f={Commission:c,'Stamp duty':g*0.001,'HKEX trading fee':g*0.00005,'SFC levy':g*0.000027,'Settlement fee':Math.min(g*0.00002,100)};
+  }
+  return f;
+}
+function tfv(p,m,a,q,pr){return Object.values(calcFees(p,m,a,q,pr)).reduce((x,y)=>x+y,0);}
+
+function renderFeePreview(cid,platform,market,action,qty,price,currency){
+  const el=document.getElementById(cid);
+  if(!qty||!price){el.innerHTML='<div class="fee-row"><span class="fee-lbl">Enter quantity and price</span></div>';return;}
+  const fees=calcFees(platform,market,action,qty,price);
+  const g=qty*price,tf=Object.values(fees).reduce((a,b)=>a+b,0),net=action==='buy'?g+tf:g-tf;
+  let h=`<div class="fee-row"><span class="fee-lbl">Gross trade value</span><span style="color:#c0cadf">${currency} ${g.toFixed(2)}</span></div>`;
+  for(const[k,v]of Object.entries(fees))h+=`<div class="fee-row"><span class="fee-lbl">${k}</span><span style="color:#c0cadf">${currency} ${v.toFixed(4)}</span></div>`;
+  h+=`<div class="fee-row"><span class="fee-lbl">Total fees</span><span style="color:#f0b429">${currency} ${tf.toFixed(4)}</span></div>`;
+  h+=`<div class="fee-row total"><span style="color:#7c8db5">${action==='buy'?'Total cost':'Net proceeds'}</span><span>${currency} ${net.toFixed(2)}</span></div>`;
+  el.innerHTML=h;
+}
+function updateFees(){
+  const m=document.getElementById('t-market').value;
+  if(m==='sgx')document.getElementById('t-currency').value='SGD';
+  else if(m==='us')document.getElementById('t-currency').value='USD';
+  else document.getElementById('t-currency').value='HKD';
+  renderFeePreview('fee-preview',document.getElementById('t-platform').value,m,document.getElementById('t-action').value,parseFloat(document.getElementById('t-qty').value)||0,parseFloat(document.getElementById('t-price').value)||0,document.getElementById('t-currency').value);
+}
+function updateEditFees(){renderFeePreview('e-fee-preview',document.getElementById('e-platform').value,document.getElementById('e-market').value,document.getElementById('e-action').value,parseFloat(document.getElementById('e-qty').value)||0,parseFloat(document.getElementById('e-price').value)||0,document.getElementById('e-currency').value);}
+
+// ── Demo data ──
+function makeDemoTrades(){
+  return[
+    {id:'d1',symbol:'D05', action:'buy', platform:'moomoo',market:'sgx',currency:'SGD',qty:200, price:36.50, gross:7300,  fxRate:1,     date:'2024-09-10',time:'09:15',timestamp:new Date('2024-09-10T09:15').getTime()},
+    {id:'d2',symbol:'AAPL',action:'buy', platform:'ibkr',  market:'us', currency:'USD',qty:10,  price:182.50,gross:1825,  fxRate:1.3450,date:'2024-10-03',time:'21:32',timestamp:new Date('2024-10-03T21:32').getTime()},
+    {id:'d3',symbol:'0700',action:'buy', platform:'moomoo',market:'hkg', currency:'HKD',qty:100, price:315.00,gross:31500, fxRate:0.1720,date:'2024-10-15',time:'10:00',timestamp:new Date('2024-10-15T10:00').getTime()},
+    {id:'d4',symbol:'D05', action:'buy', platform:'moomoo',market:'sgx',currency:'SGD',qty:100, price:35.80, gross:3580,  fxRate:1,     date:'2024-11-20',time:'09:45',timestamp:new Date('2024-11-20T09:45').getTime()},
+    {id:'d5',symbol:'NVDA',action:'buy', platform:'ibkr',  market:'us', currency:'USD',qty:5,   price:495.00,gross:2475,  fxRate:1.3380,date:'2025-01-08',time:'22:10',timestamp:new Date('2025-01-08T22:10').getTime()},
+  ].map(t=>({...t,fees:{},totalFees:tfv(t.platform,t.market,t.action,t.qty,t.price)}));
+}
+
+// ── Auth helpers ──
+function switchTab(tab){
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(tab==='login'&&i===0)||(tab==='signup'&&i===1)));
+  document.querySelectorAll('.auth-form').forEach(f=>f.classList.remove('active'));
+  document.getElementById('form-'+tab).classList.add('active');
+}
+function showErr(form,msg){const e=document.getElementById(form+'-err');e.textContent=msg;e.style.display='block';document.getElementById(form+'-ok').style.display='none';}
+function showOk(form,msg){const e=document.getElementById(form+'-ok');e.textContent=msg;e.style.display='block';document.getElementById(form+'-err').style.display='none';}
+function clearMsgs(form){['err','ok'].forEach(t=>{const e=document.getElementById(form+'-'+t);if(e)e.style.display='none';});}
+
+async function doSignup(){
+  clearMsgs('signup');
+  const email=document.getElementById('signup-email').value.trim();
+  const pw=document.getElementById('signup-pw').value;
+  const pw2=document.getElementById('signup-pw2').value;
+  if(!email||!pw){showErr('signup','Please fill in all fields.');return;}
+  if(pw.length<8){showErr('signup','Password must be at least 8 characters.');return;}
+  if(pw!==pw2){showErr('signup','Passwords do not match.');return;}
+  const btn=document.getElementById('signup-btn');
+  btn.disabled=true;btn.textContent='Creating account...';
+  // Step 1: create account with password
+  const{data:signUpData,error:signUpError}=await db.auth.signUp({email,password:pw});
+  if(signUpError){btn.disabled=false;btn.textContent='Create account';showErr('signup',signUpError.message);return;}
+  // Step 2: send OTP code to email for verification
+  const{error:otpError}=await db.auth.signInWithOtp({email,options:{shouldCreateUser:false}});
+  btn.disabled=false;btn.textContent='Create account';
+  if(otpError){showErr('signup','Account created but could not send verification code: '+otpError.message);return;}
+  pendingEmail=email;
+  pendingPassword=pw;
+  document.querySelectorAll('.auth-form').forEach(f=>f.classList.remove('active'));
+  document.querySelectorAll('.auth-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('otp-email-label').textContent=email;
+  document.getElementById('form-otp').classList.add('active');
+  clearMsgs('otp');
+  setTimeout(()=>document.getElementById('otp0').focus(),100);
+}
+
+function otpIn(i){
+  const v=document.getElementById('otp'+i).value.replace(/\D/g,'');
+  document.getElementById('otp'+i).value=v;
+  if(v&&i<5)document.getElementById('otp'+(i+1)).focus();
+  if(i===5&&v)verifyOTP();
+}
+function otpKey(i,e){if(e.key==='Backspace'&&!document.getElementById('otp'+i).value&&i>0)document.getElementById('otp'+(i-1)).focus();}
+function getOTP(){return[0,1,2,3,4,5].map(i=>document.getElementById('otp'+i).value).join('');}
+
+async function verifyOTP(){
+  clearMsgs('otp');
+  const token=getOTP();
+  if(token.length<6){showErr('otp','Please enter all 6 digits.');return;}
+  const btn=document.getElementById('otp-btn');
+  btn.disabled=true;btn.textContent='Verifying...';
+  const{data,error}=await db.auth.verifyOtp({email:pendingEmail,token,type:'email'});
+  if(error){
+    btn.disabled=false;btn.textContent='Verify and sign in';
+    showErr('otp','Invalid or expired code. Please try again or resend.');
+    [0,1,2,3,4,5].forEach(i=>document.getElementById('otp'+i).value='');
+    document.getElementById('otp0').focus();
+    return;
+  }
+  if(pendingPassword){
+    const{data:ld,error:le}=await db.auth.signInWithPassword({email:pendingEmail,password:pendingPassword});
+    btn.disabled=false;btn.textContent='Verify and sign in';
+    if(le){showErr('otp','Verified! But sign-in failed: '+le.message);return;}
+    pendingPassword='';
+    enterApp(ld.user);
+  } else {
+    btn.disabled=false;btn.textContent='Verify and sign in';
+    if(data?.user)enterApp(data.user);
+  }
+}
+
+async function resendOTP(){
+  clearMsgs('otp');
+  const{error}=await db.auth.signInWithOtp({email:pendingEmail,options:{shouldCreateUser:false}});
+  if(error)showErr('otp',error.message);
+  else showOk('otp','A new code has been sent to your email.');
+}
+
+async function doLogin(){
+  clearMsgs('login');
+  const email=document.getElementById('login-email').value.trim();
+  const pw=document.getElementById('login-pw').value;
+  if(!email||!pw){showErr('login','Please enter your email and password.');return;}
+  const btn=document.getElementById('login-btn');
+  btn.disabled=true;btn.textContent='Signing in...';
+  const{data,error}=await db.auth.signInWithPassword({email,password:pw});
+  btn.disabled=false;btn.textContent='Sign in';
+  if(error){showErr('login',error.message);return;}
+  enterApp(data.user);
+}
+
+function enterDemo(){
+  isDemo=true;currentUser=null;
+  trades=makeDemoTrades();
+  document.getElementById('auth-wrap').style.display='none';
+  document.getElementById('app-shell').style.display='block';
+  document.getElementById('demo-chip').style.display='inline-block';
+  document.getElementById('demo-banner').style.display='flex';
+  document.getElementById('user-email-disp').textContent='Demo mode';
+  document.getElementById('login-prompt').classList.add('show');
+  document.getElementById('submit-btn').style.display='none';
+  renderDashboard();renderHistory();
+}
+
+function resetDemo(){
+  if(!confirm('Reset demo to original 5 trades?'))return;
+  trades=makeDemoTrades();currentPrices={};
+  renderDashboard();renderHistory();
+}
+
+function goToAuth(tab){
+  document.getElementById('app-shell').style.display='none';
+  document.getElementById('auth-wrap').style.display='flex';
+  switchTab(tab);
+}
+
+async function enterApp(user){
+  currentUser=user;isDemo=false;
+  document.getElementById('auth-wrap').style.display='none';
+  document.getElementById('app-shell').style.display='block';
+  document.getElementById('demo-chip').style.display='none';
+  document.getElementById('demo-banner').style.display='none';
+  document.getElementById('user-email-disp').textContent=user.email;
+  document.getElementById('login-prompt').classList.remove('show');
+  document.getElementById('submit-btn').style.display='inline-block';
+  trades=await loadTrades();
+  renderDashboard();renderHistory();
+}
+
+async function doSignOut(){
+  await db.auth.signOut();
+  currentUser=null;isDemo=false;trades=[];currentPrices={};
+  if(pnlChart){pnlChart.destroy();pnlChart=null;}
+  document.getElementById('app-shell').style.display='none';
+  document.getElementById('auth-wrap').style.display='flex';
+  switchTab('login');clearMsgs('login');
+}
+
+// ── Supabase data ──
+async function loadTrades(){
+  if(!currentUser)return[];
+  const{data,error}=await db.from('trades').select('*').eq('user_id',currentUser.id).order('trade_date',{ascending:false}).order('trade_time',{ascending:false});
+  if(error){console.error(error);return[];}
+  return(data||[]).map(r=>({id:r.id,symbol:r.symbol,action:r.action,platform:r.platform,market:r.market,currency:r.currency,qty:Number(r.qty),price:Number(r.price),gross:Number(r.gross),totalFees:Number(r.total_fees),fees:r.fees||{},fxRate:Number(r.fx_rate)||1,date:r.trade_date,time:r.trade_time||'',timestamp:new Date(r.trade_date+'T'+(r.trade_time||'00:00')).getTime()}));
+}
+
+async function submitTrade(){
+  if(isDemo){document.getElementById('login-prompt').classList.add('show');return;}
+  const sym=document.getElementById('t-symbol').value.trim().toUpperCase();
+  const qty=parseFloat(document.getElementById('t-qty').value);
+  const price=parseFloat(document.getElementById('t-price').value);
+  const fxRate=parseFloat(document.getElementById('t-fx').value)||1;
+  const platform=document.getElementById('t-platform').value;
+  const market=document.getElementById('t-market').value;
+  const action=document.getElementById('t-action').value;
+  const date=document.getElementById('t-date').value;
+  const time=document.getElementById('t-time').value;
+  const currency=document.getElementById('t-currency').value;
+  if(!sym||!qty||!price||!date){alert('Please fill in all required fields.');return;}
+  const fees=calcFees(platform,market,action,qty,price);
+  const totalFees=Object.values(fees).reduce((a,b)=>a+b,0);
+  const btn=document.getElementById('submit-btn');
+  const st=document.getElementById('submit-status');
+  btn.disabled=true;st.textContent='Saving...';
+  const{error}=await db.from('trades').insert({user_id:currentUser.id,symbol:sym,action,platform,market,currency,qty,price,gross:qty*price,total_fees:totalFees,fees,fx_rate:fxRate,trade_date:date,trade_time:time});
+  btn.disabled=false;
+  if(error){st.textContent='Error: '+error.message;return;}
+  st.textContent='Trade saved!';setTimeout(()=>st.textContent='',2500);
+  clearForm();trades=await loadTrades();renderDashboard();renderHistory();
+}
+
+function clearForm(){['t-symbol','t-qty','t-price','t-fx'].forEach(id=>document.getElementById(id).value='');updateFees();}
+
+function openEditModal(id){
+  if(isDemo){alert('Create an account to edit trades.');return;}
+  const t=trades.find(x=>x.id===id);if(!t)return;
+  editingId=id;
+  ['action','platform','market','symbol','qty','price','date','time','currency'].forEach(f=>{const el=document.getElementById('e-'+f);if(el)el.value=t[f==='date'?'date':f==='time'?'time':f];});
+  document.getElementById('e-action').value=t.action;
+  document.getElementById('e-platform').value=t.platform;
+  document.getElementById('e-market').value=t.market;
+  document.getElementById('e-symbol').value=t.symbol;
+  document.getElementById('e-qty').value=t.qty;
+  document.getElementById('e-price').value=t.price;
+  document.getElementById('e-date').value=t.date;
+  document.getElementById('e-time').value=t.time;
+  document.getElementById('e-currency').value=t.currency;
+  document.getElementById('e-fx').value=t.fxRate||1;
+  document.getElementById('edit-modal').classList.add('open');
+  updateEditFees();
+}
+function closeModal(){document.getElementById('edit-modal').classList.remove('open');editingId=null;}
+
+async function saveEdit(){
+  if(!editingId||!currentUser)return;
+  const action=document.getElementById('e-action').value;
+  const platform=document.getElementById('e-platform').value;
+  const market=document.getElementById('e-market').value;
+  const sym=document.getElementById('e-symbol').value.trim().toUpperCase();
+  const qty=parseFloat(document.getElementById('e-qty').value);
+  const price=parseFloat(document.getElementById('e-price').value);
+  const date=document.getElementById('e-date').value;
+  const time=document.getElementById('e-time').value;
+  const currency=document.getElementById('e-currency').value;
+  const fxRate=parseFloat(document.getElementById('e-fx').value)||1;
+  const fees=calcFees(platform,market,action,qty,price);
+  const totalFees=Object.values(fees).reduce((a,b)=>a+b,0);
+  const btn=document.getElementById('save-edit-btn');
+  btn.disabled=true;btn.textContent='Saving...';
+  const{error}=await db.from('trades').update({symbol:sym,action,platform,market,currency,qty,price,gross:qty*price,total_fees:totalFees,fees,fx_rate:fxRate,trade_date:date,trade_time:time}).eq('id',editingId).eq('user_id',currentUser.id);
+  btn.disabled=false;btn.textContent='Save changes';
+  if(error){alert('Error: '+error.message);return;}
+  closeModal();trades=await loadTrades();renderHistory();renderDashboard();
+}
+
+async function deleteTrade(id){
+  if(isDemo){alert('Create an account to manage trades.');return;}
+  if(!confirm('Delete this trade permanently?'))return;
+  const{error}=await db.from('trades').delete().eq('id',id).eq('user_id',currentUser.id);
+  if(error){alert('Error: '+error.message);return;}
+  trades=await loadTrades();renderHistory();renderDashboard();
+}
+
+// ── Portfolio logic ──
+function toSGD(amount,currency,fxRate){return currency==='SGD'?amount:amount*(fxRate||1);}
+function getFX(){return{USD:parseFloat(document.getElementById('fx-usd').value)||1.34,HKD:parseFloat(document.getElementById('fx-hkd').value)||0.172,SGD:1};}
+
+function getPositions(){
+  const pos={};
+  const sorted=[...trades].sort((a,b)=>a.timestamp-b.timestamp);
+  for(const t of sorted){
+    const k=t.symbol+'_'+t.market+'_'+t.currency;
+    if(!pos[k])pos[k]={symbol:t.symbol,market:t.market,currency:t.currency,qty:0,totalCostNative:0,totalCostSGD:0,totalFeesSGD:0};
+    const p=pos[k];
+    if(t.action==='buy'){p.qty+=t.qty;p.totalCostNative+=t.gross+t.totalFees;p.totalCostSGD+=toSGD(t.gross+t.totalFees,t.currency,t.fxRate);}
+    else{const ac=p.qty>0?p.totalCostNative/p.qty:0;const af=p.totalCostNative>0?p.totalCostSGD/p.totalCostNative:1;p.totalCostNative-=ac*t.qty;p.totalCostSGD-=ac*t.qty*af;p.qty-=t.qty;}
+    p.totalFeesSGD+=toSGD(t.totalFees,t.currency,t.fxRate);
+  }
+  return Object.values(pos).filter(p=>p.qty>0.0001);
+}
+
+function renderDashboard(){
+  const positions=getPositions();const fxNow=getFX();
+  let tCost=0,tMkt=0,tFees=0,tFxGL=0;const labels=[],pnlData=[],pnlColors=[];
+  if(!positions.length){
+    document.getElementById('pos-tbody').innerHTML='<tr><td colspan="9" class="empty-state">No positions yet. Add your first trade.</td></tr>';
+    document.getElementById('price-inputs').innerHTML='<span class="muted" style="font-size:13px;">Add trades to see inputs.</span>';
+    ['m-invested','m-mktval','m-pnl','m-fx','m-fees'].forEach(id=>document.getElementById(id).textContent='SGD 0.00');
+    document.getElementById('m-pnlpct').textContent='0.00%';
+    document.getElementById('m-positions').textContent='0 positions';
+    renderPnlChart([],[],[]);return;
+  }
+  let rows='',priceInputs=[];
+  for(const p of positions){
+    const acn=p.qty>0?p.totalCostNative/p.qty:0;
+    const avgFx=p.totalCostNative>0?p.totalCostSGD/p.totalCostNative:1;
+    const lp=currentPrices[p.symbol]!==undefined?currentPrices[p.symbol]:acn;
+    const curFx=fxNow[p.currency]||1;
+    const mvN=lp*p.qty,mvS=mvN*curFx,cS=p.totalCostSGD,pnl=mvS-cS,pnlP=cS>0?(pnl/cS)*100:0;
+    const fxGL=p.currency!=='SGD'?mvN*(curFx-avgFx):0;
+    tCost+=cS;tMkt+=mvS;tFees+=p.totalFeesSGD;tFxGL+=fxGL;
+    const pc=pnl>=0?'pos':'neg',fc=fxGL>=0?'pos':'neg';
+    const s=v=>(v>=0?'+ ':'- ')+'SGD '+Math.abs(v).toFixed(2);
+    rows+=`<tr><td style="font-weight:500;color:#e2e8f0">${p.symbol}</td><td><span class="badge b-${p.market}">${p.market.toUpperCase()}</span></td><td>${p.qty.toFixed(0)}</td><td style="line-height:1.5">${p.currency} ${acn.toFixed(3)}<br><span class="muted" style="font-size:10px;">@ ${avgFx.toFixed(4)} SGD</span></td><td><input type="number" step="0.001" value="${lp.toFixed(3)}" style="width:74px;padding:4px 7px;border:1px solid #2a2f3e;border-radius:6px;background:#0f1117;color:#e2e8f0;font-size:12px;outline:none;" onchange="updatePrice('${p.symbol}',this.value)"><br><span class="muted" style="font-size:10px;">FX ${curFx.toFixed(4)}</span></td><td>SGD ${mvS.toFixed(2)}</td><td class="${pc}" style="font-weight:500">${s(pnl)}</td><td class="${pc}">${(pnl>=0?'+':'')}${pnlP.toFixed(2)}%</td><td class="${fc}">${s(fxGL)}</td></tr>`;
+    labels.push(p.symbol);pnlData.push(parseFloat(pnl.toFixed(2)));pnlColors.push(pnl>=0?'#22c87a':'#f04e59');
+    priceInputs.push(`<div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:10px;color:#7c8db5;text-transform:uppercase;letter-spacing:0.4px">${p.symbol} (${p.currency})</label><input type="number" step="0.001" value="${lp.toFixed(3)}" style="width:90px;padding:6px 8px;border:1px solid #2a2f3e;border-radius:6px;background:#0f1117;color:#e2e8f0;font-size:13px;outline:none;" onchange="updatePrice('${p.symbol}',this.value)"></div>`);
+  }
+  document.getElementById('pos-tbody').innerHTML=rows;
+  document.getElementById('price-inputs').innerHTML=priceInputs.join('');
+  const tp=tMkt-tCost,tpp=tCost>0?(tp/tCost)*100:0;
+  document.getElementById('m-invested').textContent='SGD '+tCost.toFixed(2);
+  document.getElementById('m-mktval').textContent='SGD '+tMkt.toFixed(2);
+  const pe=document.getElementById('m-pnl');pe.textContent=(tp>=0?'+ ':'- ')+'SGD '+Math.abs(tp).toFixed(2);pe.className='metric-value '+(tp>=0?'pos':'neg');
+  document.getElementById('m-pnlpct').textContent=(tpp>=0?'+':'')+tpp.toFixed(2)+'%';
+  const fe=document.getElementById('m-fx');fe.textContent=(tFxGL>=0?'+ ':'- ')+'SGD '+Math.abs(tFxGL).toFixed(2);fe.className='metric-value '+(tFxGL>=0?'pos':'neg');
+  document.getElementById('m-fees').textContent='SGD '+tFees.toFixed(2);
+  document.getElementById('m-positions').textContent=positions.length+' position'+(positions.length!==1?'s':'');
+  renderPnlChart(labels,pnlData,pnlColors);
+}
+
+function updatePrice(sym,val){currentPrices[sym]=parseFloat(val)||0;renderDashboard();}
+
+function renderPnlChart(labels,data,colors){
+  const canvas=document.getElementById('pnlChart');
+  if(pnlChart){pnlChart.destroy();pnlChart=null;}
+  if(!labels.length)return;
+  pnlChart=new Chart(canvas,{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors,borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e2840',borderColor:'#3a4055',borderWidth:1,titleColor:'#c0cadf',bodyColor:'#7c8db5',callbacks:{label:ctx=>' SGD '+(ctx.raw>=0?'+':'')+ctx.raw.toFixed(2)}}},scales:{x:{grid:{display:false},ticks:{color:'#7c8db5'}},y:{grid:{color:'#1e2435'},ticks:{color:'#7c8db5',callback:v=>(v>=0?'+':'')+v}}}}});
+}
+
+const PRICE_PROXY='https://script.google.com/macros/s/AKfycbxJPVI4dgLxmvGJBF4w5ybZIgSm_sXFL5ks3Yw3M4qJMr_MaoKddSAytYYBvYsBOat7fA/exec';
+
+async function refreshPrices(){
+  const positions=getPositions();
+  if(!positions.length){document.getElementById('refresh-status').textContent='No positions.';return;}
+  const st=document.getElementById('refresh-status');
+  st.innerHTML='<span class="spin">↻</span> Fetching via Google Finance... (please wait up to 30 sec)';
+
+// Build ticker map with the new prefix format
+  const tickerMap = {};
+  positions.forEach(p => {
+    let t = p.symbol;
+    // Note: Ensure 'sgx' and 'hkg' match the casing in your database
+    if (p.market.toLowerCase() === 'sgx') {
+      t = 'SES:' + p.symbol;
+    } else if (p.market.toLowerCase() === 'hkg') {
+      // Strips leading zeros so 09988 becomes 9988
+      let cleanSym = p.symbol.toString().replace(/^0+/, '');
+      t = 'HKG:' + cleanSym;
+    }
+    tickerMap[t] = p.symbol;
+  });
+
+  const tickerList=Object.keys(tickerMap).join(',');
+
+  try{
+    const data = await fetchViaJsonp(PRICE_PROXY+'?tickers='+tickerList.split(',').map(t=>encodeURIComponent(t.trim())).join(','));
+
+    if(data.error)throw new Error(data.error);
+
+    let fetched=0,failed=[];
+    Object.entries(data).forEach(([ticker,price])=>{
+      const sym=tickerMap[ticker];
+      if(sym&&price&&price>0){
+        currentPrices[sym]=price;
+        fetched++;
+      } else if(sym){
+        failed.push(sym);
+      }
+    });
+
+    renderDashboard();
+    const now=new Date().toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit'});
+    if(fetched>0&&!failed.length){
+      st.textContent='Updated '+fetched+' price'+(fetched>1?'s':'')+' at '+now;
+    } else if(fetched>0){
+      st.textContent='Updated '+fetched+'; could not fetch: '+failed.join(', ');
+    } else {
+      st.textContent='Could not fetch prices — Google Finance returned no data.';
+    }
+  }catch(e){
+    renderDashboard();
+    st.textContent='Fetch error: '+e.message+'. Update prices manually.';
+    console.error('Price fetch error:',e);
+  }
+}
+
+function fetchViaJsonp(url){
+  return new Promise((resolve,reject)=>{
+    const cbName='_trackr_cb_'+Date.now();
+    const script=document.createElement('script');
+    const timeout=setTimeout(()=>{
+      cleanup();
+      reject(new Error('Timed out — Google Finance took too long. Try again.'));
+    },35000);
+    function cleanup(){
+      clearTimeout(timeout);
+      delete window[cbName];
+      try{if(script.parentNode)script.parentNode.removeChild(script);}catch(e){}
+    }
+    window[cbName]=function(data){
+      cleanup();
+      resolve(data);
+    };
+    // Append timestamp to avoid cached responses
+    const sep=url.includes('?')?'&':'?';
+    script.src=url+sep+'callback='+cbName+'&t='+Date.now();
+    script.onerror=function(e){
+      cleanup();
+      reject(new Error('Script blocked by browser security policy'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+function renderHistory(){
+  if(!trades.length){document.getElementById('hist-tbody').innerHTML='<tr><td colspan="12" class="empty-state">No trades yet.</td></tr>';return;}
+  document.getElementById('hist-tbody').innerHTML=trades.map(t=>{
+    const net=t.action==='buy'?t.gross+t.totalFees:t.gross-t.totalFees;
+    const sgd=toSGD(net,t.currency,t.fxRate);
+    const canEdit=!isDemo;
+    return`<tr><td style="white-space:nowrap;color:#7c8db5">${t.date} ${t.time}</td><td><span class="badge b-${t.action}">${t.action.toUpperCase()}</span></td><td style="font-weight:500;color:#e2e8f0">${t.symbol}</td><td><span class="badge b-${t.market}">${t.market.toUpperCase()}</span></td><td><span class="badge b-${t.platform}">${t.platform==='ibkr'?'IBKR':'Moomoo'}</span></td><td>${t.qty}</td><td>${t.currency} ${t.price.toFixed(3)}</td><td>${t.currency} ${t.gross.toFixed(2)}</td><td style="color:#f0b429">${t.currency} ${t.totalFees.toFixed(4)}</td><td style="line-height:1.5">${(t.fxRate||1).toFixed(4)}<br><span class="muted" style="font-size:10px;">1 ${t.currency}=${t.fxRate||1} SGD</span></td><td style="font-weight:500;color:#e2e8f0">SGD ${sgd.toFixed(2)}</td><td style="white-space:nowrap">${canEdit?`<button class="btn btn-sm" onclick="openEditModal(${JSON.stringify(t.id)});showPage('add-trade',null)" style="margin-right:4px;">Edit</button><button class="btn btn-sm btn-danger" onclick="deleteTrade(${JSON.stringify(t.id)})">Delete</button>`:'<span class="muted" style="font-size:11px;">Demo</span>'}</td></tr>`;
+  }).join('');
+}
+
+function exportCSV(){
+  if(!trades.length){alert('No trades to export');return;}
+  const hdr=['Date','Time','Action','Symbol','Market','Platform','Qty','Price','Currency','Gross','Fees','FX Rate','Total SGD'];
+  const rows=trades.map(t=>{const net=t.action==='buy'?t.gross+t.totalFees:t.gross-t.totalFees;return[t.date,t.time,t.action,t.symbol,t.market,t.platform,t.qty,t.price,t.currency,t.gross.toFixed(2),t.totalFees.toFixed(4),(t.fxRate||1).toFixed(4),toSGD(net,t.currency,t.fxRate).toFixed(2)];});
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([[hdr,...rows].map(r=>r.join(',')).join('\n')],{type:'text/csv'}));a.download='trades.csv';a.click();
+}
+
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn)btn.classList.add('active');
+  if(id==='dashboard')renderDashboard();
+  if(id==='history')renderHistory();
+  if(id==='add-trade'){setDT();updateFees();closeModal();}
+}
+function setDT(){const n=new Date();document.getElementById('t-date').value=n.toISOString().split('T')[0];document.getElementById('t-time').value=n.toTimeString().slice(0,5);}
+
+async function boot(){
+  setDT();updateFees();
+  const{data:{session}}=await db.auth.getSession();
+  if(session?.user)enterApp(session.user);
+  db.auth.onAuthStateChange(async(event,session)=>{
+    if(event==='SIGNED_IN'&&session?.user&&!currentUser)enterApp(session.user);
+  });
+}
+boot();
+</script>
+</body>
+</html>
