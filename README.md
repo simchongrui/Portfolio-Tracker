@@ -20,7 +20,7 @@ Singapore investors often trade across IBKR, Moomoo, Tiger Brokers, and local ba
 
 **Known limitations & tradeoffs**
 
-  - SGX prices via SGX public API may have a short delay; Google Finance does not support SGX data
+  - SGX prices must be updated manually - no free API reliably provides SGX price data for programmatic access; Google Finance also does not support SGX data
   - FX rates are ECB mid-market reference rates and may differ slightly from broker trading rates
   - Historical price charts use monthly data points (not tick-by-tick) to minimise processing load
 
