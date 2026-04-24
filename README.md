@@ -12,17 +12,17 @@ Singapore investors often trade across IBKR, Moomoo, Tiger Brokers, and local ba
 
 **Built with**
 
-Frontend: Vanilla HTML, CSS, JavaScript — single-file deployment, no build step
-Auth & database: Supabase (free tier) — email/OTP signup, Row Level Security ensuring each user's data is fully isolated
-Price data: Google Apps Script proxy (free, no rate limits) pulling from Google Finance (US, HK, LSE), Yahoo Finance (historical prices)
-FX rates: Frankfurter API (ECB reference rates, free, no key required)
-Hosting: GitHub Pages (free, zero backend)
+  - Frontend: Vanilla HTML, CSS, JavaScript — single-file deployment, no build step
+  - Auth & database: Supabase (free tier) — email/OTP signup, Row Level Security ensuring each user's data is fully isolated
+  - Price data: Google Apps Script proxy (free, no rate limits) pulling from Google Finance (US, HK, LSE), Yahoo Finance (historical prices)
+  - FX rates: Frankfurter API (ECB reference rates, free, no key required)
+  - Hosting: GitHub Pages (free, zero backend)
 
 **Known limitations & tradeoffs**
 
-SGX prices via SGX public API may have a short delay; Google Finance does not support SGX data
-FX rates are ECB mid-market reference rates and may differ slightly from broker trading rates
-Historical price charts use monthly data points (not tick-by-tick) to minimise processing load
+  - SGX prices via SGX public API may have a short delay; Google Finance does not support SGX data
+  - FX rates are ECB mid-market reference rates and may differ slightly from broker trading rates
+  - Historical price charts use monthly data points (not tick-by-tick) to minimise processing load
 
 **This project**
 
