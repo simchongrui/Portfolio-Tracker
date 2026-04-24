@@ -1,6 +1,5 @@
 **TrackR - Your personal portfolio tracker**
 
-Introduction
 The app/webpage is a portfolio tracker designed for the Singapore market. An investor in Singapore could trade using multiple platforms and hold cash on different platforms or banks. Some of the concerns they may face include:
   1. Unable to easily view their consolidated net worth across different platforms and institutions
   2. Unable to easily view their consolidated overall returns and P&L across different platforms and shares
