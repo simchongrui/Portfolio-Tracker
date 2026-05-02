@@ -1204,21 +1204,27 @@ function calcPortfolioReturn(period) {
     tradePriceOnDate[key] = (t.gross + t.totalFees) / t.qty; // avg cost per share incl fees
   }
 
+  const lastDate = sortedDates[sortedDates.length - 1];
   const points = [];
   for (const date of sortedDates) {
     const holdings = getHoldingsOnDate(date);
     if (!holdings) continue;
     let totalCostSGD=0, totalMktValSGD=0;
+    const isLatestDate = (date === lastDate);
     for (const [k,h] of Object.entries(holdings)) {
       if (h.qty<0.0001) continue;
       const parts=k.split('_'); const sym=parts[0]; const cur=parts[2];
       const curFx=fxNow[cur]||1;
 
-      // On the exact trade date, use the trade's own price to ensure 0% return on day of purchase
-      // Otherwise use historical closing price, falling back to current price, then avg cost
+      // For the latest date: always use currentPrices so the chart endpoint matches
+      // the Total Assets box exactly (both use the same manually-corrected prices).
+      // For past dates: use trade price on trade date (ensures 0% return on day of purchase),
+      // then historical closing price, then fall back to currentPrices / avg cost.
       const tradeKey = date + '_' + sym;
       let price;
-      if (tradePriceOnDate[tradeKey]) {
+      if (isLatestDate) {
+        price = currentPrices[sym] || getPriceOnDate(sym, date) || h.avgCostNative;
+      } else if (tradePriceOnDate[tradeKey]) {
         price = tradePriceOnDate[tradeKey];
       } else {
         price = getPriceOnDate(sym, date);
@@ -1294,14 +1300,22 @@ function renderAssetsChart(){
   const pts=calcPortfolioReturn(assetsPeriod);
   if(!pts.length)return;
 
-  // For each chart date, compute cumulative cash from transactions on or before that date
+  // For each chart date, compute cumulative cash from transactions on or before that date.
+  // For the latest (rightmost) point, use getCashBalances() directly so it always matches
+  // the Total Assets box on the dashboard (both use identical data sources).
+  const lastPtDate = pts[pts.length-1].date;
+  const currentCashSGD = getCashBalances().reduce((s,b)=>s+b.computedAmountSGD,0);
   const mapped=pts.map(p=>{
-    const cashOnDate=cashTransactions.reduce((s,t)=>{
-      if(t.txnDate<=p.date)s+=t.deltaSGD;
-      return s;
-    },0);
-    // If no transactions recorded yet, fall back to current total cash (for demo / no-history case)
-    const effectiveCash=cashTransactions.length>0?Math.max(0,cashOnDate):getCashBalances().reduce((s,b)=>s+b.computedAmountSGD,0);
+    let effectiveCash;
+    if(p.date===lastPtDate){
+      effectiveCash=currentCashSGD;
+    } else {
+      const cashOnDate=cashTransactions.reduce((s,t)=>{
+        if(t.txnDate<=p.date)s+=t.deltaSGD;
+        return s;
+      },0);
+      effectiveCash=cashTransactions.length>0?Math.max(0,cashOnDate):currentCashSGD;
+    }
     return{...p,total:parseFloat((p.assets+effectiveCash).toFixed(2))};
   });
 
