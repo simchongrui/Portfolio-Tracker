@@ -163,6 +163,7 @@ tr:hover td{background:#1a2030;}
 .cash-item:last-child{border-bottom:none;}
 .divbar{height:4px;border-radius:2px;background:#2a2f3e;margin-top:4px;}
 .divbar-fill{height:100%;border-radius:2px;background:#a080e0;}
+.metric-value.metric-link:hover{text-decoration:underline;opacity:0.85;}
 @media(max-width:600px){
   .topbar{overflow-x:auto;}
   .nav-btn{padding:14px 10px;font-size:11px;}
@@ -259,11 +260,13 @@ tr:hover td{background:#1a2030;}
         <div class="metric"><div class="metric-label">Total assets (SGD)</div><div class="metric-value" id="m-assets">—</div><div class="metric-sub" id="m-positions">—</div></div>
         <div class="metric"><div class="metric-label">Cash (SGD)</div><div class="metric-value" id="m-cash">—</div><div class="metric-sub">all platforms</div></div>
       </div>
-      <!-- Summary metrics — row 2: Market value, Invested, Total P&L -->
-      <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:1.25rem;">
+      <!-- Summary metrics — row 2: Market value, Invested, Unrealized P&L, Realized P&L, Total P&L -->
+      <div class="metrics-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:1.25rem;">
         <div class="metric"><div class="metric-label">Market value (SGD)</div><div class="metric-value" id="m-mktval">—</div><div class="metric-sub">at current FX</div></div>
         <div class="metric"><div class="metric-label">Invested (SGD)</div><div class="metric-value" id="m-invested">—</div><div class="metric-sub">cost basis</div></div>
-        <div class="metric"><div class="metric-label">Total P&amp;L (SGD)</div><div class="metric-value" id="m-pnl">—</div><div class="metric-sub" id="m-pnlpct">—</div></div>
+        <div class="metric"><div class="metric-label">Unrealized P&amp;L (SGD)</div><div class="metric-value" id="m-unrealized">—</div><div class="metric-sub" id="m-unrealizedpct">open positions</div></div>
+        <div class="metric"><div class="metric-label">Realized P&amp;L (SGD)</div><div class="metric-value metric-link" id="m-realized" style="cursor:pointer;" onclick="showPage('history',document.querySelectorAll('.nav-btn')[2]);switchHistTab('realized')">—</div><div class="metric-sub"><span style="font-size:10px;color:#7c8db5;">↗ View breakdown</span></div></div>
+        <div class="metric"><div class="metric-label">Total P&amp;L (SGD)</div><div class="metric-value" id="m-pnl">—</div><div class="metric-sub" id="m-pnlpct">unrealized + realized</div></div>
       </div>
       <!-- Hidden elements kept for JS compatibility -->
       <div style="display:none;">
@@ -485,6 +488,7 @@ tr:hover td{background:#1a2030;}
         <div class="input-type-tabs" style="margin-bottom:1rem;">
           <button class="input-type-tab active" id="htab-trades" onclick="switchHistTab('trades')">Trade history</button>
           <button class="input-type-tab" id="htab-cash" onclick="switchHistTab('cash')">Cash history</button>
+          <button class="input-type-tab" id="htab-realized" onclick="switchHistTab('realized')">Realized P&amp;L</button>
         </div>
         <!-- Trade history -->
         <div id="hsection-trades" class="input-section active">
@@ -506,6 +510,31 @@ tr:hover td{background:#1a2030;}
               <thead><tr><th>Date</th><th>Platform</th><th>Change (SGD)</th><th>Note</th><th>Actions</th></tr></thead>
               <tbody id="cash-hist-tbody"><tr><td colspan="4" class="loading-inline"><span class="spin">↻</span> Loading...</td></tr></tbody>
             </table>
+          </div>
+        </div>
+        <!-- Realized P&L history -->
+        <div id="hsection-realized" class="input-section">
+          <div style="font-size:12px;color:#7c8db5;margin-bottom:1rem;line-height:1.6;">
+            Profit and loss locked in from closed or partially-sold positions. Cost basis uses FIFO — remaining shares retain their original avg cost.
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Symbol</th>
+                <th>Mkt</th>
+                <th>Shares sold</th>
+                <th>Avg buy price</th>
+                <th>Avg sell price</th>
+                <th>Realized P&amp;L (native)</th>
+                <th>Realized P&amp;L (SGD)</th>
+                <th>Return %</th>
+              </tr></thead>
+              <tbody id="realized-tbody"><tr><td colspan="8" class="loading-inline">—</td></tr></tbody>
+            </table>
+          </div>
+          <div id="realized-total-row" style="display:none;border-top:1px solid #2a2f3e;margin-top:12px;padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;color:#7c8db5;">Total realized P&amp;L</span>
+            <span style="font-weight:500;font-size:14px;" id="realized-total-val">—</span>
           </div>
         </div>
       </div>
@@ -612,6 +641,10 @@ function makeDemoTrades(){
     // 0700 Tencent HKG
     {id:'d12',symbol:'0700',action:'buy',platform:'moomoo',market:'hkg',currency:'HKD',qty:200,price:310.00,gross:62000,fxRate:0.1720,date:'2022-11-01',time:'10:00',timestamp:new Date('2022-11-01T10:00').getTime()},
     {id:'d13',symbol:'0700',action:'buy',platform:'moomoo',market:'hkg',currency:'HKD',qty:100,price:280.00,gross:28000,fxRate:0.1730,date:'2023-05-20',time:'10:30',timestamp:new Date('2023-05-20T10:30').getTime()},
+    // AAPL — partial sell in 2024 (realized profit on 10 shares)
+    {id:'d14',symbol:'AAPL',action:'sell',platform:'ibkr',market:'us',currency:'USD',qty:10,price:195.00,gross:1950,fxRate:1.3450,date:'2024-03-15',time:'21:00',timestamp:new Date('2024-03-15T21:00').getTime()},
+    // NVDA — partial sell after AI rally
+    {id:'d15',symbol:'NVDA',action:'sell',platform:'ibkr',market:'us',currency:'USD',qty:10,price:820.00,gross:8200,fxRate:1.3400,date:'2024-06-20',time:'21:30',timestamp:new Date('2024-06-20T21:30').getTime()},
   ].map(t=>({...t,fees:{},totalFees:tfv(t.platform,t.market,t.action,t.qty,t.price)}));
 }
 function makeDemoDividends(){
@@ -1058,6 +1091,56 @@ function getPositions(){
   return Object.values(pos).filter(p=>p.qty>0.0001);
 }
 
+// ── Realized P&L engine ──
+// Uses FIFO cost basis. For each sell, matched against oldest buy lots.
+// Returns per-symbol realized P&L summaries.
+function calcRealizedPnL(){
+  const sorted=[...trades].sort((a,b)=>a.timestamp-b.timestamp);
+  const lotsByKey={};
+  const realizedByKey={};
+  for(const t of sorted){
+    const k=t.symbol+'_'+t.market+'_'+t.currency;
+    if(!lotsByKey[k])lotsByKey[k]=[];
+    if(!realizedByKey[k])realizedByKey[k]={symbol:t.symbol,market:t.market,currency:t.currency,qtySold:0,totalBuyCostNative:0,totalSellProceedsNative:0,totalBuyCostSGD:0,totalSellProceedsSGD:0};
+    if(t.action==='buy'){
+      const cpn=(t.gross+t.totalFees)/t.qty;
+      const cps=toSGD(t.gross+t.totalFees,t.currency,t.fxRate)/t.qty;
+      lotsByKey[k].push({qty:t.qty,costNative:cpn,costSGD:cps});
+    }else if(t.action==='sell'){
+      const netN=t.gross-t.totalFees;
+      const netS=toSGD(netN,t.currency,t.fxRate);
+      const ppn=netN/t.qty;
+      const pps=netS/t.qty;
+      let rem=t.qty;
+      const lots=lotsByKey[k];
+      while(rem>0.0001&&lots.length>0){
+        const lot=lots[0];
+        const take=Math.min(lot.qty,rem);
+        const r=realizedByKey[k];
+        r.qtySold+=take;
+        r.totalBuyCostNative+=take*lot.costNative;
+        r.totalBuyCostSGD+=take*lot.costSGD;
+        r.totalSellProceedsNative+=take*ppn;
+        r.totalSellProceedsSGD+=take*pps;
+        lot.qty-=take;
+        rem-=take;
+        if(lot.qty<0.0001)lots.shift();
+      }
+    }
+  }
+  return Object.values(realizedByKey).filter(r=>r.qtySold>0.0001).map(r=>{
+    const pnlNative=r.totalSellProceedsNative-r.totalBuyCostNative;
+    const pnlSGD=r.totalSellProceedsSGD-r.totalBuyCostSGD;
+    const avgBuyNative=r.qtySold>0?r.totalBuyCostNative/r.qtySold:0;
+    const avgSellNative=r.qtySold>0?r.totalSellProceedsNative/r.qtySold:0;
+    const returnPct=r.totalBuyCostNative>0?(pnlNative/r.totalBuyCostNative)*100:0;
+    return{...r,pnlNative,pnlSGD,avgBuyNative,avgSellNative,returnPct};
+  });
+}
+function getTotalRealizedPnLSGD(){
+  return calcRealizedPnL().reduce((s,r)=>s+r.pnlSGD,0);
+}
+
 function sortPositions(col){
   if(posSortCol===col){posSortDir=posSortDir==='asc'?'desc':'asc';}else{posSortCol=col;posSortDir='desc';}
   renderDashboard();
@@ -1360,8 +1443,9 @@ function renderDashboard(){
 
   if(!positions.length){
     document.getElementById('pos-tbody').innerHTML='<tr><td colspan="10" class="empty-state">No positions yet. Add your first trade.</td></tr>';
-    ['m-invested','m-mktval','m-pnl','m-fx','m-fees'].forEach(id=>document.getElementById(id).textContent='SGD 0.00');
-    document.getElementById('m-pnlpct').textContent='0.00%';
+    ['m-invested','m-mktval','m-pnl','m-fx','m-fees','m-unrealized','m-realized'].forEach(id=>document.getElementById(id).textContent='SGD 0.00');
+    document.getElementById('m-pnlpct').textContent='unrealized + realized';
+    document.getElementById('m-unrealizedpct').textContent='open positions';
     document.getElementById('m-positions').textContent='0 positions';
     document.getElementById('m-cash').textContent='SGD '+totalCashSGD.toFixed(2);
     document.getElementById('m-divtotal').textContent='SGD '+totalDivSGD.toFixed(2);
@@ -1431,12 +1515,27 @@ function renderDashboard(){
   document.getElementById('pos-tbody').innerHTML=rows;
 
   const tp=tMkt-tCost,tpp=tCost>0?(tp/tCost)*100:0;
+  const realizedSGD=getTotalRealizedPnLSGD();
+  const totalPnlSGD=tp+realizedSGD;
   const totalAssets=tMkt+totalCashSGD;
   document.getElementById('m-invested').textContent='SGD '+tCost.toFixed(2);
   document.getElementById('m-mktval').textContent='SGD '+tMkt.toFixed(2);
   document.getElementById('m-assets').textContent='SGD '+totalAssets.toFixed(2);
-  const pe=document.getElementById('m-pnl');pe.textContent=(tp>=0?'+ ':'- ')+'SGD '+Math.abs(tp).toFixed(2);pe.className='metric-value '+(tp>=0?'pos':'neg');
-  document.getElementById('m-pnlpct').textContent=(tpp>=0?'+':'')+tpp.toFixed(2)+'%';
+  // Unrealized P&L
+  const ue=document.getElementById('m-unrealized');
+  ue.textContent=(tp>=0?'+ ':'- ')+'SGD '+Math.abs(tp).toFixed(2);
+  ue.className='metric-value '+(tp>=0?'pos':'neg');
+  document.getElementById('m-unrealizedpct').textContent=(tp>=0?'+':'')+tpp.toFixed(2)+'% open positions';
+  // Realized P&L
+  const re=document.getElementById('m-realized');
+  re.textContent=(realizedSGD>=0?'+ ':'- ')+'SGD '+Math.abs(realizedSGD).toFixed(2);
+  re.className='metric-value '+(realizedSGD>=0?'pos':'neg');
+  re.style.cursor='pointer';
+  // Total P&L
+  const pe=document.getElementById('m-pnl');
+  pe.textContent=(totalPnlSGD>=0?'+ ':'- ')+'SGD '+Math.abs(totalPnlSGD).toFixed(2);
+  pe.className='metric-value '+(totalPnlSGD>=0?'pos':'neg');
+  document.getElementById('m-pnlpct').textContent='unrealized + realized';
   const fe=document.getElementById('m-fx');fe.textContent=(tFxGL>=0?'+ ':'- ')+'SGD '+Math.abs(tFxGL).toFixed(2);fe.className='metric-value '+(tFxGL>=0?'pos':'neg');
   document.getElementById('m-fees').textContent='SGD '+tFees.toFixed(2);
   document.getElementById('m-positions').textContent=positions.length+' position'+(positions.length!==1?'s':'');
@@ -1571,12 +1670,49 @@ function renderCashHistory(){
   }).join('');
 }
 
+function renderRealizedPnL(){
+  const tbody=document.getElementById('realized-tbody');
+  const totalRow=document.getElementById('realized-total-row');
+  const totalVal=document.getElementById('realized-total-val');
+  if(!tbody)return;
+  const rows=calcRealizedPnL();
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="8" class="empty-state">No realized trades yet. Realized P&amp;L appears when you sell shares.</td></tr>';
+    if(totalRow)totalRow.style.display='none';
+    return;
+  }
+  let grandTotalSGD=0;
+  tbody.innerHTML=rows.map(r=>{
+    grandTotalSGD+=r.pnlSGD;
+    const pc=r.pnlNative>=0?'pos':'neg';
+    const sign=v=>(v>=0?'+ ':'- ')+r.currency+' '+Math.abs(v).toFixed(2);
+    const signSGD=v=>(v>=0?'+ ':'- ')+'SGD '+Math.abs(v).toFixed(2);
+    return`<tr>
+      <td style="font-weight:500;color:#e2e8f0">${r.symbol}</td>
+      <td><span class="badge b-${r.market}">${r.market.toUpperCase()}</span></td>
+      <td>${r.qtySold%1===0?r.qtySold.toFixed(0):r.qtySold.toFixed(4)}</td>
+      <td>${r.currency} ${r.avgBuyNative.toFixed(3)}</td>
+      <td>${r.currency} ${r.avgSellNative.toFixed(3)}</td>
+      <td class="${pc}" style="font-weight:500">${sign(r.pnlNative)}</td>
+      <td class="${pc}" style="font-weight:500">${signSGD(r.pnlSGD)}</td>
+      <td class="${pc}">${(r.returnPct>=0?'+':'')+r.returnPct.toFixed(2)}%</td>
+    </tr>`;
+  }).join('');
+  if(totalRow){
+    totalRow.style.display='flex';
+    const pc=grandTotalSGD>=0?'pos':'neg';
+    totalVal.textContent=(grandTotalSGD>=0?'+ ':'- ')+'SGD '+Math.abs(grandTotalSGD).toFixed(2);
+    totalVal.className=pc;
+  }
+}
+
 function switchHistTab(tab){
   document.querySelectorAll('#page-history .input-type-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('#page-history .input-section').forEach(s=>s.classList.remove('active'));
   document.getElementById('htab-'+tab).classList.add('active');
   document.getElementById('hsection-'+tab).classList.add('active');
   if(tab==='cash')renderCashHistory();
+  if(tab==='realized')renderRealizedPnL();
 }
 
 function renderHistory(){
