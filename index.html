@@ -1183,7 +1183,7 @@ let historyFetchInProgress = false;
 
 function toStooqTicker(symbol, market) {
   if (market === 'us')  return symbol.toUpperCase() + '.US';
-  if (market === 'hkg') return symbol + '.HK';
+  if (market === 'hkg') return String(parseInt(symbol, 10) || symbol) + '.HK'; // strip leading zeros: 03067 → 3067.HK
   if (market === 'lse') return symbol.toUpperCase() + '.UK';
   if (market === 'sgx') return symbol + '.SI';
   // Fallback — log unexpected market value
@@ -1898,6 +1898,13 @@ function processImportRows(rows,filename){
 
     const market=detectMarket(marketVal,currencyVal);
     const currency=currencyVal||(market==='hkg'?'HKD':market==='us'?'USD':market==='lse'?'GBP':'SGD');
+
+    // Normalise symbol: HKG stocks strip leading zeros (03067 → 3067) to match price feed format
+    const rawSymbol=cols.symbol!==-1?r[cols.symbol].trim().toUpperCase():'?';
+    const symbol=(market==='hkg'&&/^\d+$/.test(rawSymbol))
+      ? String(parseInt(rawSymbol,10))
+      : rawSymbol;
+
     const gross=fillQty*fillPrice;
 
     // Fees: Total col overrides auto-calc
