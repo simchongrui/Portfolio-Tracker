@@ -1897,6 +1897,10 @@ const FIELD_CANDIDATES={
   totalFees: ['total','total fees','total fee','fees total','all fees','total charges'],
   commission:['commission','comm'],
   assetclass:['assetclass','asset class','assettype','subcategory','subcat'],
+  proceeds:  ['proceeds'],
+  netcash:   ['netcash','net cash'],
+  clientaccountid:['clientaccountid','client account id','account id'],
+  conid:     ['conid','con id','contract id'],
 };
 let importParsed=[];
 
@@ -1998,7 +2002,7 @@ function processImportRows(rows,filename){
   const isIBKR=resolveCol(headers,'clientaccountid')!==-1||resolveCol(headers,'conid')!==-1;
   const detectedPlatform=isIBKR?'ibkr':'moomoo';
 
-  // IBKR-specific column indexes
+  // IBKR-specific column indexes — now backed by FIELD_CANDIDATES entries
   const assetClassIdx=resolveCol(headers,'assetclass');
   const proceedsIdx=resolveCol(headers,'proceeds');
   const netCashIdx=resolveCol(headers,'netcash');
