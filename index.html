@@ -1894,7 +1894,7 @@ const FIELD_CANDIDATES={
   status:    ['status','order status','state'],
   market:    ['markets','market','exchange','listingexchange'],
   currency:  ['currency','ccy','currencyprimary'],
-  totalFees: ['total','total fees','total fee','fees total','all fees','total charges','netcash'],
+  totalFees: ['total','total fees','total fee','fees total','all fees','total charges'],
   commission:['commission','comm'],
   assetclass:['assetclass','asset class','assettype','subcategory','subcat'],
 };
@@ -2064,9 +2064,12 @@ function processImportRows(rows,filename){
     // Fallback: sum individual fee columns if present
     let totalFees=0,feesSource='none';
     if(isIBKR&&proceedsIdx!==-1&&netCashIdx!==-1){
-      const proceeds=Math.abs(parseNum(r[proceedsIdx]));
-      const netCash=Math.abs(parseNum(r[netCashIdx]));
-      totalFees=Math.abs(netCash-proceeds);
+      // Fees = Proceeds - NetCash (signed subtraction works for both buys and sells)
+      // Buy:  Proceeds=-1333.52, NetCash=-1337.88  → -1333.52 - (-1337.88) = 4.36 ✓
+      // Sell: Proceeds=1467.48,  NetCash=1466.38   → 1467.48 - 1466.38    = 1.09 ✓
+      const proceeds=parseNum(r[proceedsIdx]);
+      const netCash=parseNum(r[netCashIdx]);
+      totalFees=Math.abs(proceeds-netCash);
       feesSource='ibkr';
     }else{
       const totalFeesRaw=cols.totalFees!==-1?parseNum(r[cols.totalFees]):0;
