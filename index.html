@@ -2012,7 +2012,10 @@ function buildTickerMap(positions){
     if(p.market==='us'){
       t=p.symbol; // e.g. AAPL
     }else if(p.market==='hkg'){
-      t='HKG:'+p.symbol.toString().padStart(4,'0'); // e.g. HKG:0700
+      // Google Finance uses numeric HKG tickers without leading zeros: HKG:700, HKG:9988
+      // Strip any leading zeros (handles both old stored '09988' and new '9988')
+      const num=parseInt(p.symbol,10);
+      t='HKG:'+(isNaN(num)?p.symbol:String(num)); // e.g. HKG:700, HKG:9988, HKG:3067
     }else if(p.market==='lse'){
       t='LON:'+p.symbol; // e.g. LON:BARC
     }
