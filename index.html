@@ -539,7 +539,7 @@ tr:has(.bulk-chk-trades:checked),tr:has(.bulk-chk-cash:checked){background:#1e25
             <!-- Bulk action bar - trade history -->
             <div id="bulk-bar-trades" style="display:none;background:#1a1e2e;border:1px solid #2a2f3e;border-radius:8px;padding:10px 14px;margin-bottom:10px;display:none;align-items:center;gap:12px;flex-wrap:wrap;">
               <span id="bulk-count-trades" style="font-size:12px;color:#7c8db5;flex:1;">0 selected</span>
-              <button class="btn btn-sm btn-danger" onclick="bulkDelete('trades')">🗑 Delete selected</button>
+              <button id="bulk-delete-btn-trades" class="btn btn-sm btn-danger" onclick="bulkDelete('trades')">🗑 Delete selected</button>
               <button class="btn btn-sm" onclick="clearBulkSelection('trades')">Cancel</button>
             </div>
             <table>
@@ -557,7 +557,7 @@ tr:has(.bulk-chk-trades:checked),tr:has(.bulk-chk-cash:checked){background:#1e25
             <!-- Bulk action bar - cash history -->
             <div id="bulk-bar-cash" style="display:none;background:#1a1e2e;border:1px solid #2a2f3e;border-radius:8px;padding:10px 14px;margin-bottom:10px;align-items:center;gap:12px;flex-wrap:wrap;">
               <span id="bulk-count-cash" style="font-size:12px;color:#7c8db5;flex:1;">0 selected</span>
-              <button class="btn btn-sm btn-danger" onclick="bulkDelete('cash')">🗑 Delete selected</button>
+              <button id="bulk-delete-btn-cash" class="btn btn-sm btn-danger" onclick="bulkDelete('cash')">🗑 Delete selected</button>
               <button class="btn btn-sm" onclick="clearBulkSelection('cash')">Cancel</button>
             </div>
             <table>
@@ -1807,14 +1807,47 @@ async function bulkDelete(type){
   if(!ids.length)return;
   const label=type==='trades'?'trade':(type==='cash'?'cash transaction':'entry');
   if(!confirm(`Permanently delete ${ids.length} ${label}${ids.length!==1?'s':''}? This cannot be undone.`))return;
+
+  const btn=document.getElementById(`bulk-delete-btn-${type}`);
+  const countEl=document.getElementById(`bulk-count-${type}`);
   const tbl=type==='trades'?'trades':'cash_transactions';
-  // Delete in batches to stay within Supabase URL length limits
-  let errors=0;
+
+  // Lock UI
+  btn.disabled=true;
+  btn.textContent='Deleting…';
+  document.querySelectorAll(`.bulk-chk-${type}`).forEach(cb=>{cb.disabled=true;});
+
+  let done=0,errors=0;
   for(const id of ids){
+    // Update progress counter
+    countEl.textContent=`Deleting ${done+1} of ${ids.length}…`;
+
+    // Fade out the row visually as it's deleted
+    const cb=document.querySelector(`.bulk-chk-${type}[data-id="${id}"]`);
+    if(cb){
+      const row=cb.closest('tr');
+      if(row)row.style.opacity='0.3';
+    }
+
     const{error}=await db.from(tbl).delete().eq('id',id).eq('user_id',currentUser.id);
-    if(error){console.warn('Bulk delete error:',error.message);errors++;}
+    if(error){
+      console.warn('Bulk delete error:',error.message);
+      errors++;
+      // Restore row opacity on failure
+      const cb2=document.querySelector(`.bulk-chk-${type}[data-id="${id}"]`);
+      if(cb2){const row=cb2.closest('tr');if(row)row.style.opacity='1';}
+    }
+    done++;
   }
-  if(errors)alert(`${ids.length-errors} deleted. ${errors} failed — check console.`);
+
+  // Show completion briefly before re-rendering
+  const succeeded=done-errors;
+  btn.textContent=errors?`Done (${errors} failed)`:'✓ Done';
+  countEl.textContent=errors
+    ?`${succeeded} deleted, ${errors} failed — check console`
+    :`${succeeded} item${succeeded!==1?'s':''} deleted`;
+
+  await new Promise(r=>setTimeout(r,600)); // brief pause so user sees the done state
   await loadAll();renderAll();
   if(type==='trades')renderHistory();
   if(type==='cash'){renderCashHistory();switchHistTab('cash');}
