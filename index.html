@@ -1883,7 +1883,6 @@ function processImportRows(rows,filename){
     const fillQty=cols.fillQty!==-1?parseNum(r[cols.fillQty]):0;
     const fillPrice=cols.fillPrice!==-1?parseNum(r[cols.fillPrice]):0;
     if(!fillQty||!fillPrice){skippedNoFill++;continue;}
-    const symbol=cols.symbol!==-1?r[cols.symbol].trim().toUpperCase():'?';
     const action=side.toLowerCase().includes('buy')?'buy':side.toLowerCase().includes('sell')?'sell':'';
     if(!action){skippedNoFill++;continue;}
     const timeRaw=(cols.fillTime!==-1&&r[cols.fillTime])?r[cols.fillTime]:(cols.orderTime!==-1?r[cols.orderTime]:'');
