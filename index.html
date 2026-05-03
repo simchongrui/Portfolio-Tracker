@@ -1990,22 +1990,11 @@ function processImportRows(rows,filename){
   for(const concept of Object.keys(FIELD_CANDIDATES))cols[concept]=resolveCol(headers,concept);
 
   const warnings=[];
-  // Validate required columns — IBKR uses Proceeds+NetCash for fees, not a single "Total" col
-  const keyFields=isIBKR
-    ?['side','symbol','fillQty','fillPrice','fillTime','currency','proceeds','netcash']
-    :['side','symbol','fillQty','fillPrice','fillTime','currency','totalFees'];
-  const missing=keyFields.filter(f=>{
-    if(f==='proceeds')return proceedsIdx===-1;
-    if(f==='netcash')return netCashIdx===-1;
-    return cols[f]===-1;
-  });
-  if(missing.length>0)warnings.push(`Could not find columns for: ${missing.join(', ')}. Will attempt best-effort parsing.`);
-
   const parsed=[];
   let skippedCancelled=0,skippedFailed=0,skippedPartial=0,skippedNoFill=0;
 
   // Detect broker from file headers — reliable regardless of filename
-  // IBKR-specific columns: ClientAccountID (account IDs start with U + digits) and Conid
+  // IBKR-specific columns: ClientAccountID and Conid are unique to IBKR exports
   const isIBKR=resolveCol(headers,'clientaccountid')!==-1||resolveCol(headers,'conid')!==-1;
   const detectedPlatform=isIBKR?'ibkr':'moomoo';
 
@@ -2017,6 +2006,17 @@ function processImportRows(rows,filename){
   // Find all indexes of duplicate-named columns (Moomoo has two "Markets" and two "Currency" cols)
   const allMarketIdxs=headers.reduce((acc,h,i)=>{if(h.toLowerCase()==='markets')acc.push(i);return acc;},[]);
   const allCurrIdxs=headers.reduce((acc,h,i)=>{if(h.toLowerCase()==='currency')acc.push(i);return acc;},[]);
+
+  // Validate required columns — IBKR uses Proceeds+NetCash for fees, not a single "Total" col
+  const keyFields=isIBKR
+    ?['side','symbol','fillQty','fillPrice','fillTime','currency','proceeds','netcash']
+    :['side','symbol','fillQty','fillPrice','fillTime','currency','totalFees'];
+  const missing=keyFields.filter(f=>{
+    if(f==='proceeds')return proceedsIdx===-1;
+    if(f==='netcash')return netCashIdx===-1;
+    return cols[f]===-1;
+  });
+  if(missing.length>0)warnings.push(`Could not find columns for: ${missing.join(', ')}. Will attempt best-effort parsing.`);
 
   for(let i=1;i<rows.length;i++){
     const r=rows[i];
