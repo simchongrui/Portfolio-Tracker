@@ -166,12 +166,34 @@ tr:hover td{background:#1a2030;}
 .divbar-fill{height:100%;border-radius:2px;background:#a080e0;}
 .metric-value.metric-link:hover{text-decoration:underline;opacity:0.85;}
 tr:has(.bulk-chk-trades:checked),tr:has(.bulk-chk-cash:checked){background:#1e2535;}
+.metrics-grid-5{grid-template-columns:repeat(5,1fr);}
+@media(max-width:900px){
+  .metrics-grid-5{grid-template-columns:repeat(3,1fr);}
+}
 @media(max-width:600px){
-  .topbar{overflow-x:auto;}
-  .nav-btn{padding:14px 10px;font-size:11px;}
+  .content{padding:0.875rem;}
+  .topbar{padding:0 0.75rem;}
+  .topbar-right .user-chip{display:none;}
+  .logo{margin-right:0.75rem;font-size:14px;}
+  .nav-btn{padding:12px 10px;font-size:11px;}
   .metrics-grid{grid-template-columns:1fr 1fr;}
+  .metrics-grid-5{grid-template-columns:1fr 1fr;}
+  .metric{padding:11px 12px;}
+  .metric-value{font-size:15px;}
   .form-grid{grid-template-columns:1fr 1fr;}
   .auth-box{padding:1.5rem 1.25rem;}
+  .card{padding:1rem;}
+  .section-hdr{flex-direction:column;align-items:flex-start;}
+  .fx-bar{gap:8px;}
+  .fx-bar input{width:60px;}
+  .period-toggles{gap:3px;}
+  .period-btn{padding:3px 7px;font-size:10px;}
+  .input-type-tabs{overflow-x:auto;}
+  .input-type-tab{padding:10px 12px;font-size:12px;white-space:nowrap;}
+  .chart-container{height:200px;}
+  .refresh-row{flex-wrap:wrap;gap:6px;}
+  .demo-banner{flex-direction:column;align-items:flex-start;}
+  .modal-box{padding:1rem;}
 }
 </style>
 </head>
@@ -263,7 +285,7 @@ tr:has(.bulk-chk-trades:checked),tr:has(.bulk-chk-cash:checked){background:#1e25
         <div class="metric"><div class="metric-label">Cash (SGD)</div><div class="metric-value" id="m-cash">—</div><div class="metric-sub">all platforms</div></div>
       </div>
       <!-- Summary metrics — row 2: Market value, Invested, Unrealized P&L, Realized P&L, Total P&L -->
-      <div class="metrics-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:1.25rem;">
+      <div class="metrics-grid metrics-grid-5" style="margin-bottom:1.25rem;">
         <div class="metric"><div class="metric-label">Market value (SGD)</div><div class="metric-value" id="m-mktval">—</div><div class="metric-sub">at current FX</div></div>
         <div class="metric"><div class="metric-label">Invested (SGD)</div><div class="metric-value" id="m-invested">—</div><div class="metric-sub">cost basis</div></div>
         <div class="metric"><div class="metric-label">Unrealized P&amp;L (SGD)</div><div class="metric-value" id="m-unrealized">—</div><div class="metric-sub" id="m-unrealizedpct">open positions</div></div>
@@ -296,14 +318,14 @@ tr:has(.bulk-chk-trades:checked),tr:has(.bulk-chk-cash:checked){background:#1e25
           <table>
             <thead><tr>
               <th onclick="sortPositions('symbol')">Symbol</th>
-              <th>Mkt</th>
-              <th onclick="sortPositions('qty')">Qty</th>
-              <th>Avg cost</th>
               <th>Last price</th>
+              <th onclick="sortPositions('qty')">Qty</th>
               <th onclick="sortPositions('mktval')">Mkt val (SGD)</th>
               <th onclick="sortPositions('pnl')">P&amp;L (SGD)</th>
               <th onclick="sortPositions('pnlpct')">P&amp;L %</th>
               <th onclick="sortPositions('weight')">Portfolio %</th>
+              <th>Avg cost</th>
+              <th>Mkt</th>
               <th>FX gain/loss</th>
             </tr></thead>
             <tbody id="pos-tbody"><tr><td colspan="10" class="loading-inline"><span class="spin">↻</span> Loading...</td></tr></tbody>
@@ -1582,10 +1604,8 @@ function renderDashboard(){
     const s=v=>(v>=0?'+ ':'- ')+'SGD '+Math.abs(v).toFixed(2);
     rows+=`<tr>
       <td style="font-weight:500;color:#e2e8f0">${p.symbol}</td>
-      <td><span class="badge b-${p.market}">${p.market.toUpperCase()}</span></td>
-      <td>${p.qty%1===0?p.qty.toFixed(0):parseFloat(p.qty.toFixed(5)).toString()}</td>
-      <td style="line-height:1.5">${p.currency} ${acn.toFixed(3)}<br><span class="muted" style="font-size:10px;">@ ${avgFx.toFixed(4)} SGD</span></td>
       <td><input type="number" step="0.001" value="${lp.toFixed(3)}" style="width:74px;padding:4px 7px;border:1px solid #2a2f3e;border-radius:6px;background:#0f1117;color:#e2e8f0;font-size:12px;outline:none;" onchange="updatePrice('${p.symbol}',this.value)"><br><span class="muted" style="font-size:10px;">FX ${curFx.toFixed(4)}</span></td>
+      <td>${p.qty%1===0?p.qty.toFixed(0):parseFloat(p.qty.toFixed(5)).toString()}</td>
       <td>SGD ${mvS.toFixed(2)}</td>
       <td class="${pc}" style="font-weight:500">${s(pnl)}</td>
       <td class="${pc}">${(pnl>=0?'+':'')}${pnlP.toFixed(2)}%</td>
@@ -1595,6 +1615,8 @@ function renderDashboard(){
           <div style="flex:1;height:4px;background:#2a2f3e;border-radius:2px;min-width:40px;"><div style="width:${Math.min(weight,100)}%;height:100%;background:#f0b429;border-radius:2px;"></div></div>
         </div>
       </td>
+      <td style="line-height:1.5">${p.currency} ${acn.toFixed(3)}<br><span class="muted" style="font-size:10px;">@ ${avgFx.toFixed(4)} SGD</span></td>
+      <td><span class="badge b-${p.market}">${p.market.toUpperCase()}</span></td>
       <td class="${fc}">${s(fxGL)}</td>
     </tr>`;
   }
