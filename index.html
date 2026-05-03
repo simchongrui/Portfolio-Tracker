@@ -1772,16 +1772,17 @@ function renderHistory(){
 const FIELD_CANDIDATES={
   side:      ['side','action','buy/sell','type','direction','order side','trade side'],
   symbol:    ['symbol','ticker','stock code','code','security','instrument','stock symbol','stock'],
-  fillQty:   ['fill qty','filled qty','filled quantity','quantity filled','executed qty','exec qty','qty filled','fill quantity'],
-  fillPrice: ['fill price','filled price','avg fill price','filled@avg price','exec price','executed price','average price','fill avg price'],
-  fillAmount:['fill amount','filled amount','gross amount','gross','filled gross'],
-  fillTime:  ['fill time','filled time','execution time','exec time','trade time','transaction time'],
+  fillQty:   ['fill qty','filled qty','filled quantity','quantity filled','executed qty','exec qty','qty filled','fill quantity','quantity'],
+  fillPrice: ['fill price','filled price','avg fill price','filled@avg price','exec price','executed price','average price','fill avg price','price'],
+  fillAmount:['fill amount','filled amount','gross amount','gross','filled gross','amount'],
+  fillTime:  ['fill time','filled time','execution time','exec time','trade time','transaction time','date/time','datetime'],
   orderTime: ['order time','order date','time','date','trade date'],
   status:    ['status','order status','state'],
-  market:    ['markets','market','exchange'],
-  currency:  ['currency','ccy'],
-  totalFees: ['total','total fees','total fee','fees total','all fees','total charges'],
+  market:    ['markets','market','exchange','listingexchange'],
+  currency:  ['currency','ccy','currencyprimary'],
+  totalFees: ['total','total fees','total fee','fees total','all fees','total charges','netcash'],
   commission:['commission','comm'],
+  assetclass:['assetclass','asset class','assettype','subcategory','subcat'],
 };
 let importParsed=[];
 
@@ -1797,10 +1798,16 @@ function resolveCol(headers,concept){
 function parseBrokerDateTime(raw){
   if(!raw)return{date:'',time:''};
   raw=raw.trim();
+  // Moomoo: "Apr 30, 2026 10:34:27 HKT"
   const m=raw.match(/([A-Za-z]+)\s+(\d+),\s*(\d{4})\s+(\d{2}):(\d{2})/);
   if(m){const mo={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}[m[1].toLowerCase().slice(0,3)]||'01';return{date:`${m[3]}-${mo}-${m[2].padStart(2,'0')}`,time:`${m[4]}:${m[5]}`};}
+  // IBKR: "09/03/2026;221358" (DD/MM/YYYY;HHMMSS)
+  const ibkr=raw.match(/(\d{2})\/(\d{2})\/(\d{4})[;T\s](\d{2})(\d{2})/);
+  if(ibkr)return{date:`${ibkr[3]}-${ibkr[2]}-${ibkr[1]}`,time:`${ibkr[4]}:${ibkr[5]}`};
+  // ISO: "2026-04-30 10:34"
   const iso=raw.match(/(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/);
   if(iso)return{date:iso[1],time:iso[2]};
+  // DD/MM/YYYY HH:MM
   const dmy=raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2}:\d{2})?/);
   if(dmy)return{date:`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`,time:dmy[4]||'09:00'};
   return{date:'',time:''};
@@ -1811,11 +1818,20 @@ function parseNum(s){if(!s&&s!==0)return 0;return parseFloat(String(s).replace(/
 function detectMarket(marketVal,currencyVal){
   const m=(marketVal||'').trim().toUpperCase();
   const c=(currencyVal||'').trim().toUpperCase();
-  if(m==='HK'||m==='HKEX'||c==='HKD')return 'hkg';
-  if(m==='US'||m==='NYSE'||m==='NASDAQ'||c==='USD')return 'us';
-  if(m==='SGX'||m==='SG'||c==='SGD')return 'sgx';
-  if(m==='LSE'||m==='UK'||m==='GB'||c==='GBP')return 'lse';
-  return 'hkg';
+  // HKG: IBKR uses SEHK; Moomoo uses HK
+  if(m==='SEHK'||m==='HK'||m==='HKEX')return 'hkg';
+  // LSE: IBKR uses LSEETF, TRWBUKETF, EUDARK (for LSE-listed ETFs)
+  if(m==='LSEETF'||m==='LSE'||m==='UK'||m==='GB')return 'lse';
+  // SGX
+  if(m==='SGX'||m==='SG')return 'sgx';
+  // US: IBKR uses NASDAQ, NYSE, DARK, IBKRATS, ARCA, ISLAND etc
+  if(m==='US'||m==='NASDAQ'||m==='NYSE'||m==='DARK'||m==='IBKRATS'||m==='ARCA'||m==='ISLAND'||m==='BATS'||m==='EDGX')return 'us';
+  // Currency fallback
+  if(c==='HKD')return 'hkg';
+  if(c==='SGD')return 'sgx';
+  if(c==='GBP')return 'lse';
+  if(c==='USD')return 'us';
+  return 'us';
 }
 
 function parseCSVText(text){
@@ -1867,6 +1883,16 @@ function processImportRows(rows,filename){
   const parsed=[];
   let skippedCancelled=0,skippedFailed=0,skippedPartial=0,skippedNoFill=0;
 
+  // Detect broker from file headers — reliable regardless of filename
+  // IBKR-specific columns: ClientAccountID (account IDs start with U + digits) and Conid
+  const isIBKR=resolveCol(headers,'clientaccountid')!==-1||resolveCol(headers,'conid')!==-1;
+  const detectedPlatform=isIBKR?'ibkr':'moomoo';
+
+  // IBKR-specific column indexes
+  const assetClassIdx=resolveCol(headers,'assetclass');
+  const proceedsIdx=resolveCol(headers,'proceeds');
+  const netCashIdx=resolveCol(headers,'netcash');
+
   // Find all indexes of duplicate-named columns (Moomoo has two "Markets" and two "Currency" cols)
   const allMarketIdxs=headers.reduce((acc,h,i)=>{if(h.toLowerCase()==='markets')acc.push(i);return acc;},[]);
   const allCurrIdxs=headers.reduce((acc,h,i)=>{if(h.toLowerCase()==='currency')acc.push(i);return acc;},[]);
@@ -1874,17 +1900,29 @@ function processImportRows(rows,filename){
   for(let i=1;i<rows.length;i++){
     const r=rows[i];
     if(r.every(c=>c===''))continue;
+
+    // Skip FX/cash conversion rows (IBKR includes SGD.HKD, USD.SGD etc)
+    const assetClass=assetClassIdx!==-1?r[assetClassIdx].toUpperCase():'';
+    if(assetClass==='CASH')continue;
+
     const side=cols.side!==-1?r[cols.side]:'';
     if(!side){skippedPartial++;continue;}
     const status=cols.status!==-1?r[cols.status]:'Filled';
     const statusLc=status.toLowerCase();
     if(statusLc==='cancelled'||statusLc==='canceled'){skippedCancelled++;continue;}
     if(statusLc==='failed'){skippedFailed++;continue;}
-    const fillQty=cols.fillQty!==-1?parseNum(r[cols.fillQty]):0;
+
+    // IBKR uses negative quantities for sells — take abs value
+    const rawQty=cols.fillQty!==-1?parseNum(r[cols.fillQty]):0;
+    const fillQty=Math.abs(rawQty);
     const fillPrice=cols.fillPrice!==-1?parseNum(r[cols.fillPrice]):0;
     if(!fillQty||!fillPrice){skippedNoFill++;continue;}
-    const action=side.toLowerCase().includes('buy')?'buy':side.toLowerCase().includes('sell')?'sell':'';
+
+    // Derive action from Buy/Sell column first, fallback to sign of quantity
+    const sideVal=side.toUpperCase();
+    const action=sideVal.includes('BUY')?'buy':sideVal.includes('SELL')?'sell':(rawQty>0?'buy':'sell');
     if(!action){skippedNoFill++;continue;}
+
     const timeRaw=(cols.fillTime!==-1&&r[cols.fillTime])?r[cols.fillTime]:(cols.orderTime!==-1?r[cols.orderTime]:'');
     const{date,time}=parseBrokerDateTime(timeRaw);
     if(!date){warnings.push(`Row ${i+1}: could not parse date "${timeRaw}", skipping.`);skippedNoFill++;continue;}
@@ -1906,21 +1944,33 @@ function processImportRows(rows,filename){
 
     const gross=fillQty*fillPrice;
 
-    // Fees: Total col overrides auto-calc
-    const totalFeesRaw=cols.totalFees!==-1?parseNum(r[cols.totalFees]):0;
-    let totalFees=totalFeesRaw,feesSource='csv';
-    if(!totalFees){
-      const feeNames=['commission','platform fees','trading tariff','settlement fees','stamp duty','trading fees','sfc levy','frc levy','consumption tax'];
-      let sum=0;
-      for(const fn of feeNames){const idx=resolveCol(headers,fn);if(idx!==-1)sum+=parseNum(r[idx]);}
-      totalFees=sum>0?sum:0;feesSource=sum>0?'summed':'none';
+    // Fee calculation — differs by broker:
+    // IBKR: total fees = |NetCash| - |Proceeds|  (captures commission + all taxes/levies)
+    // Moomoo: use "Total" column directly (already the all-in fee)
+    // Fallback: sum individual fee columns if present
+    let totalFees=0,feesSource='none';
+    if(isIBKR&&proceedsIdx!==-1&&netCashIdx!==-1){
+      const proceeds=Math.abs(parseNum(r[proceedsIdx]));
+      const netCash=Math.abs(parseNum(r[netCashIdx]));
+      totalFees=Math.abs(netCash-proceeds);
+      feesSource='ibkr';
+    }else{
+      const totalFeesRaw=cols.totalFees!==-1?parseNum(r[cols.totalFees]):0;
+      if(totalFeesRaw>0){
+        totalFees=totalFeesRaw;feesSource='csv';
+      }else{
+        const feeNames=['platform fees','trading tariff','settlement fees','stamp duty','trading fees','sfc levy','frc levy','consumption tax'];
+        let sum=0;
+        for(const fn of feeNames){const idx=resolveCol(headers,fn);if(idx!==-1)sum+=parseNum(r[idx]);}
+        totalFees=sum>0?sum:0;feesSource=sum>0?'summed':'none';
+      }
     }
     const fees={};
     if(cols.commission!==-1&&parseNum(r[cols.commission]))fees['Commission']=parseNum(r[cols.commission]);
     const feeFields=[['Platform Fees','platform fees'],['Trading Tariff','trading tariff'],['Settlement Fees','settlement fees'],['Stamp Duty','stamp duty'],['Trading Fees','trading fees'],['SFC Levy','sfc levy'],['FRC Levy','frc levy'],['Consumption Tax','consumption tax']];
     for(const[label,concept]of feeFields){const idx=resolveCol(headers,concept);if(idx!==-1){const v=parseNum(r[idx]);if(v)fees[label]=v;}}
 
-    parsed.push({symbol,action,market,currency,qty:fillQty,price:fillPrice,gross,totalFees,fees,date,time:time||'09:00',timestamp:new Date(date+'T'+(time||'09:00')).getTime(),feesSource});
+    parsed.push({symbol,action,market,currency,qty:fillQty,price:fillPrice,gross,totalFees,fees,date,time:time||'09:00',timestamp:new Date(date+'T'+(time||'09:00')).getTime(),feesSource,_platform:detectedPlatform});
   }
 
   if(!parsed.length){alert(`No importable trades found.\nSkipped: ${skippedCancelled} cancelled, ${skippedFailed} failed, ${skippedPartial} partial-fill rows, ${skippedNoFill} no fill data.`);return;}
@@ -1948,7 +1998,7 @@ function renderImportPreview(parsed,filename,stats){
   document.getElementById('import-preview-tbody').innerHTML=parsed.map((p,idx)=>{
     const dupeStyle=p._isDupe?'opacity:0.4;':'';
     const dupeNote=p._isDupe?'<br><span style="font-size:9px;color:#f0b429;">duplicate</span>':'';
-    const feeNote=p.feesSource==='csv'?'<span class="muted" style="font-size:9px;"> (csv)</span>':p.feesSource==='summed'?'<span class="muted" style="font-size:9px;"> (sum)</span>':'';
+    const feeNote=p.feesSource==='csv'?'<span class="muted" style="font-size:9px;"> (csv)</span>':p.feesSource==='summed'?'<span class="muted" style="font-size:9px;"> (sum)</span>':p.feesSource==='ibkr'?'<span class="muted" style="font-size:9px;"> (net)</span>':'';
     const pc=p.action==='buy'?'b-buy':'b-sell';
     return`<tr style="${dupeStyle}">
       <td><input type="checkbox" ${p._isDupe?'':'checked'} ${p._isDupe?'disabled':''} onchange="importParsed[${idx}]._selected=this.checked" style="accent-color:#f0b429;"></td>
@@ -1980,7 +2030,8 @@ async function confirmImport(){
   let saved=0,errors=0;
   for(const t of toImport){
     const fxRate=fxNow[t.currency]||1;
-    const{error}=await db.from('trades').insert({user_id:currentUser.id,symbol:t.symbol,action:t.action,platform:'moomoo',market:t.market,currency:t.currency,qty:t.qty,price:t.price,gross:t.gross,total_fees:t.totalFees,fees:t.fees,fx_rate:fxRate,trade_date:t.date,trade_time:t.time});
+    const platform=t._platform||'moomoo';
+    const{error}=await db.from('trades').insert({user_id:currentUser.id,symbol:t.symbol,action:t.action,platform,market:t.market,currency:t.currency,qty:t.qty,price:t.price,gross:t.gross,total_fees:t.totalFees,fees:t.fees,fx_rate:fxRate,trade_date:t.date,trade_time:t.time});
     if(error){console.warn('Import error:',error.message);errors++;}else saved++;
   }
   btn.disabled=false;
