@@ -1266,26 +1266,11 @@ function calcPortfolioReturn(period) {
   const sortedTrades = [...trades].filter(t=>t.action==='buy'||t.action==='sell').sort((a,b)=>a.timestamp-b.timestamp);
   if (!sortedTrades.length) return [];
 
-  const snapshots = [];
-  const runningHoldings = {};
-  for (const t of sortedTrades) {
-    const k = t.symbol+'_'+t.market+'_'+t.currency;
-    if (!runningHoldings[k]) runningHoldings[k] = {qty:0, avgCostNative:0};
-    const h = runningHoldings[k];
-    if (t.action==='buy') {
-      const prevTotal = h.qty * h.avgCostNative;
-      const newCost = (t.gross + t.totalFees) / t.qty;
-      h.qty += t.qty;
-      h.avgCostNative = (prevTotal + newCost * t.qty) / h.qty;
-    } else {
-      h.qty = Math.max(0, h.qty - t.qty);
-    }
-    snapshots.push({date: t.date, holdings: JSON.parse(JSON.stringify(runningHoldings))});
-  }
-
-  const positions = getPositions();
+  // ── Build date universe ──
+  // Combine trade dates + all historical price dates into one sorted list
   const allDates = new Set();
-  snapshots.forEach(s => allDates.add(s.date));
+  sortedTrades.forEach(t => allDates.add(t.date));
+  const positions = getPositions();
   positions.forEach(p => {
     const stooqTicker = toStooqTicker(p.symbol, p.market);
     (historicalPrices[stooqTicker] || []).forEach(pt => allDates.add(pt.date));
@@ -1302,14 +1287,16 @@ function calcPortfolioReturn(period) {
 
   const firstTradeDate = sortedTrades[0].date;
   const effectiveCutoff = period==='all' ? firstTradeDate : cutoffDate;
-  const sortedDates = [...allDates].filter(d=>d>=effectiveCutoff).sort();
+  const sortedDates = [...allDates].filter(d => d >= effectiveCutoff).sort();
   if (!sortedDates.length) return [];
 
+  // ── Price lookup helpers ──
   const priceLookup = {};
   positions.forEach(p => {
     priceLookup[p.symbol] = historicalPrices[toStooqTicker(p.symbol, p.market)] || [];
   });
 
+  // Binary search: find the most recent historical close on or before 'date'
   function getPriceOnDate(symbol, date) {
     const hist = priceLookup[symbol] || [];
     if (!hist.length) return null;
@@ -1322,58 +1309,102 @@ function calcPortfolioReturn(period) {
     return result;
   }
 
-  function getHoldingsOnDate(date) {
-    let last=null;
-    for (const s of snapshots){if(s.date<=date)last=s.holdings;else break;}
-    return last;
+  // Running FIFO holdings state — rebuilt per date point
+  // We maintain a lot queue per symbol key so avg cost is always accurate
+  const lotsByKey = {};       // key -> [{qty, costPerShare}]
+  const holdingsByKey = {};   // key -> {qty, avgCostNative, currency}
+
+  function applyTrade(t) {
+    const k = t.symbol+'_'+t.market+'_'+t.currency;
+    if (!lotsByKey[k]) lotsByKey[k] = [];
+    if (!holdingsByKey[k]) holdingsByKey[k] = {qty:0, avgCostNative:0, currency:t.currency, symbol:t.symbol, market:t.market};
+    const h = holdingsByKey[k];
+    if (t.action==='buy') {
+      const costPerShare = (t.gross + t.totalFees) / t.qty;
+      lotsByKey[k].push({qty:t.qty, cost:costPerShare});
+      // Recalculate weighted avg cost
+      const allLots = lotsByKey[k];
+      const totalQty = allLots.reduce((s,l)=>s+l.qty,0);
+      const totalCost = allLots.reduce((s,l)=>s+l.qty*l.cost,0);
+      h.qty = totalQty;
+      h.avgCostNative = totalQty > 0 ? totalCost/totalQty : 0;
+    } else {
+      // FIFO consume lots
+      let rem = t.qty;
+      const lots = lotsByKey[k];
+      while (rem>0.0001 && lots.length>0) {
+        const take = Math.min(lots[0].qty, rem);
+        lots[0].qty -= take;
+        rem -= take;
+        if (lots[0].qty < 0.0001) lots.shift();
+      }
+      const totalQty = lots.reduce((s,l)=>s+l.qty,0);
+      const totalCost = lots.reduce((s,l)=>s+l.qty*l.cost,0);
+      h.qty = totalQty;
+      h.avgCostNative = totalQty > 0 ? totalCost/totalQty : 0;
+    }
   }
 
-  // Build a lookup of trade prices by date+symbol so on the exact trade date
-  // we use the actual trade price instead of a stale monthly close
-  const tradePriceOnDate = {};
+  // ── TWR calculation ──
+  // For each date point, compute portfolio market value.
+  // Return % = (market value - cost basis) / cost basis  for current holdings.
+  // On trade dates: the buy price IS the market price, so return stays continuous.
+  // The key insight: we use the actual cost basis of current FIFO lots, not a
+  // blended avg that gets distorted by buys/sells.
+
+  // Index trades by date for fast lookup
+  const tradesByDate = {};
   for (const t of sortedTrades) {
-    const key = t.date + '_' + t.symbol;
-    tradePriceOnDate[key] = (t.gross + t.totalFees) / t.qty; // avg cost per share incl fees
+    if (!tradesByDate[t.date]) tradesByDate[t.date] = [];
+    tradesByDate[t.date].push(t);
   }
 
-  const lastDate = sortedDates[sortedDates.length - 1];
+  const lastDate = sortedDates[sortedDates.length-1];
   const points = [];
-  for (const date of sortedDates) {
-    const holdings = getHoldingsOnDate(date);
-    if (!holdings) continue;
-    let totalCostSGD=0, totalMktValSGD=0;
-    const isLatestDate = (date === lastDate);
-    for (const [k,h] of Object.entries(holdings)) {
-      if (h.qty<0.0001) continue;
-      const parts=k.split('_'); const sym=parts[0]; const cur=parts[2];
-      const curFx=fxNow[cur]||1;
 
-      // For the latest date: always use currentPrices so the chart endpoint matches
-      // the Total Assets box exactly (both use the same manually-corrected prices).
-      // For past dates: use trade price on trade date (ensures 0% return on day of purchase),
-      // then historical closing price, then fall back to currentPrices / avg cost.
-      const tradeKey = date + '_' + sym;
+  // Apply all trades that happened BEFORE the cutoff period so holdings are correct
+  // at the start of the chart window
+  const preCutoffTrades = sortedTrades.filter(t => t.date < effectiveCutoff);
+  for (const t of preCutoffTrades) applyTrade(t);
+
+  for (const date of sortedDates) {
+    // Apply any trades on this date BEFORE computing market value
+    // This ensures: on the day of purchase, cost basis = market value = trade price → 0% contribution
+    if (tradesByDate[date]) {
+      for (const t of tradesByDate[date]) applyTrade(t);
+    }
+
+    const isLatestDate = (date === lastDate);
+    let totalCostSGD = 0, totalMktValSGD = 0;
+
+    for (const [k, h] of Object.entries(holdingsByKey)) {
+      if (h.qty < 0.0001) continue;
+      const curFx = fxNow[h.currency] || 1;
+
+      // Price to use:
+      // - Latest date: use currentPrices (matches dashboard exactly), fall back to historical, then avg cost
+      // - Past dates: use historical close on or before this date, fall back to avg cost
       let price;
       if (isLatestDate) {
-        price = currentPrices[sym] || getPriceOnDate(sym, date) || h.avgCostNative;
-      } else if (tradePriceOnDate[tradeKey]) {
-        price = tradePriceOnDate[tradeKey];
+        price = currentPrices[h.symbol] ?? getPriceOnDate(h.symbol, date) ?? h.avgCostNative;
       } else {
-        price = getPriceOnDate(sym, date);
-        if (!price) price = currentPrices[sym] || h.avgCostNative;
+        price = getPriceOnDate(h.symbol, date) ?? h.avgCostNative;
       }
 
       totalCostSGD   += h.avgCostNative * h.qty * curFx;
-      totalMktValSGD += price * h.qty * curFx;
+      totalMktValSGD += price           * h.qty * curFx;
     }
-    const ret = totalCostSGD>0 ? ((totalMktValSGD-totalCostSGD)/totalCostSGD)*100 : 0;
-    points.push({date, ret:parseFloat(ret.toFixed(2)), assets:totalMktValSGD});
+
+    const ret = totalCostSGD > 0 ? ((totalMktValSGD - totalCostSGD) / totalCostSGD) * 100 : 0;
+    points.push({date, ret:parseFloat(ret.toFixed(2)), assets:parseFloat(totalMktValSGD.toFixed(2))});
   }
 
   if (!points.length) return [];
-  if (period!=='all' && points.length>1) {
-    const baseRet=points[0].ret;
-    return points.map((p,i)=>i===0?{...p,ret:0}:{...p,ret:parseFloat((p.ret-baseRet).toFixed(2))});
+
+  // For sub-period views (not 'all'), rebase so the first visible point = 0%
+  if (period !== 'all' && points.length > 1) {
+    const base = points[0].ret;
+    return points.map((p,i) => i===0 ? {...p, ret:0} : {...p, ret:parseFloat((p.ret-base).toFixed(2))});
   }
   return points;
 }
@@ -1432,23 +1463,29 @@ function renderAssetsChart(){
   const pts=calcPortfolioReturn(assetsPeriod);
   if(!pts.length)return;
 
-  // For each chart date, compute cumulative cash from transactions on or before that date.
-  // For the latest (rightmost) point, use getCashBalances() directly so it always matches
-  // the Total Assets box on the dashboard (both use identical data sources).
+  // For the latest (rightmost) point, recompute assets using the exact same
+  // source as renderDashboard (currentPrices * qty * fxNow) so they always match.
   const lastPtDate = pts[pts.length-1].date;
+  const fxNow = getFX();
+  let dashboardMktVal = 0;
+  getPositions().forEach(p => {
+    const lp = currentPrices[p.symbol] !== undefined ? currentPrices[p.symbol] : (p.qty>0 ? p.totalCostNative/p.qty : 0);
+    dashboardMktVal += lp * p.qty * (fxNow[p.currency]||1);
+  });
   const currentCashSGD = getCashBalances().reduce((s,b)=>s+b.computedAmountSGD,0);
   const mapped=pts.map(p=>{
     let effectiveCash;
     if(p.date===lastPtDate){
-      effectiveCash=currentCashSGD;
+      // Use dashboard-identical values for the rightmost point
+      return{...p, total:parseFloat((dashboardMktVal+currentCashSGD).toFixed(2))};
     } else {
       const cashOnDate=cashTransactions.reduce((s,t)=>{
         if(t.txnDate<=p.date)s+=t.deltaSGD;
         return s;
       },0);
       effectiveCash=cashTransactions.length>0?Math.max(0,cashOnDate):currentCashSGD;
+      return{...p,total:parseFloat((p.assets+effectiveCash).toFixed(2))};
     }
-    return{...p,total:parseFloat((p.assets+effectiveCash).toFixed(2))};
   });
 
   assetsChart=new Chart(canvas,{
