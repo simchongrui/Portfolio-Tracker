@@ -1990,8 +1990,15 @@ function processImportRows(rows,filename){
   for(const concept of Object.keys(FIELD_CANDIDATES))cols[concept]=resolveCol(headers,concept);
 
   const warnings=[];
-  const keyFields=['side','symbol','fillQty','fillPrice','fillTime','currency','totalFees'];
-  const missing=keyFields.filter(f=>cols[f]===-1);
+  // Validate required columns — IBKR uses Proceeds+NetCash for fees, not a single "Total" col
+  const keyFields=isIBKR
+    ?['side','symbol','fillQty','fillPrice','fillTime','currency','proceeds','netcash']
+    :['side','symbol','fillQty','fillPrice','fillTime','currency','totalFees'];
+  const missing=keyFields.filter(f=>{
+    if(f==='proceeds')return proceedsIdx===-1;
+    if(f==='netcash')return netCashIdx===-1;
+    return cols[f]===-1;
+  });
   if(missing.length>0)warnings.push(`Could not find columns for: ${missing.join(', ')}. Will attempt best-effort parsing.`);
 
   const parsed=[];
