@@ -165,6 +165,7 @@ tr:hover td{background:#1a2030;}
 .divbar{height:4px;border-radius:2px;background:#2a2f3e;margin-top:4px;}
 .divbar-fill{height:100%;border-radius:2px;background:#a080e0;}
 .metric-value.metric-link:hover{text-decoration:underline;opacity:0.85;}
+tr:has(.bulk-chk-trades:checked),tr:has(.bulk-chk-cash:checked){background:#1e2535;}
 @media(max-width:600px){
   .topbar{overflow-x:auto;}
   .nav-btn{padding:14px 10px;font-size:11px;}
@@ -535,18 +536,36 @@ tr:hover td{background:#1a2030;}
             </div>
           </div>
           <div class="table-wrap">
+            <!-- Bulk action bar - trade history -->
+            <div id="bulk-bar-trades" style="display:none;background:#1a1e2e;border:1px solid #2a2f3e;border-radius:8px;padding:10px 14px;margin-bottom:10px;display:none;align-items:center;gap:12px;flex-wrap:wrap;">
+              <span id="bulk-count-trades" style="font-size:12px;color:#7c8db5;flex:1;">0 selected</span>
+              <button class="btn btn-sm btn-danger" onclick="bulkDelete('trades')">🗑 Delete selected</button>
+              <button class="btn btn-sm" onclick="clearBulkSelection('trades')">Cancel</button>
+            </div>
             <table>
-              <thead><tr><th>Date / Time</th><th>Type</th><th>Symbol</th><th>Mkt</th><th>Platform</th><th>Qty</th><th>Price</th><th>Gross</th><th>Fees</th><th>FX rate</th><th>Total (SGD)</th><th>Actions</th></tr></thead>
-              <tbody id="hist-tbody"><tr><td colspan="12" class="loading-inline"><span class="spin">↻</span> Loading...</td></tr></tbody>
+              <thead><tr>
+                <th style="width:32px;"><input type="checkbox" id="select-all-trades" onchange="toggleSelectAll('trades',this.checked)" style="accent-color:#f0b429;cursor:pointer;" title="Select all"></th>
+                <th>Date / Time</th><th>Type</th><th>Symbol</th><th>Mkt</th><th>Platform</th><th>Qty</th><th>Price</th><th>Gross</th><th>Fees</th><th>FX rate</th><th>Total (SGD)</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="hist-tbody"><tr><td colspan="13" class="loading-inline"><span class="spin">↻</span> Loading...</td></tr></tbody>
             </table>
           </div>
         </div>
         <!-- Cash history -->
         <div id="hsection-cash" class="input-section">
           <div class="table-wrap">
+            <!-- Bulk action bar - cash history -->
+            <div id="bulk-bar-cash" style="display:none;background:#1a1e2e;border:1px solid #2a2f3e;border-radius:8px;padding:10px 14px;margin-bottom:10px;align-items:center;gap:12px;flex-wrap:wrap;">
+              <span id="bulk-count-cash" style="font-size:12px;color:#7c8db5;flex:1;">0 selected</span>
+              <button class="btn btn-sm btn-danger" onclick="bulkDelete('cash')">🗑 Delete selected</button>
+              <button class="btn btn-sm" onclick="clearBulkSelection('cash')">Cancel</button>
+            </div>
             <table>
-              <thead><tr><th>Date</th><th>Platform</th><th>Change (SGD)</th><th>Note</th><th>Actions</th></tr></thead>
-              <tbody id="cash-hist-tbody"><tr><td colspan="4" class="loading-inline"><span class="spin">↻</span> Loading...</td></tr></tbody>
+              <thead><tr>
+                <th style="width:32px;"><input type="checkbox" id="select-all-cash" onchange="toggleSelectAll('cash',this.checked)" style="accent-color:#f0b429;cursor:pointer;" title="Select all"></th>
+                <th>Date</th><th>Platform</th><th>Change (SGD)</th><th>Note</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="cash-hist-tbody"><tr><td colspan="6" class="loading-inline"><span class="spin">↻</span> Loading...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -1679,8 +1698,11 @@ function renderCash(){
 function renderCashHistory(){
   const tbody=document.getElementById('cash-hist-tbody');
   if(!tbody)return;
+  const selectAll=document.getElementById('select-all-cash');
+  if(selectAll)selectAll.checked=false;
+  updateBulkBar('cash');
   if(!cashTransactions.length){
-    tbody.innerHTML='<tr><td colspan="5" class="empty-state">No cash transactions yet.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="6" class="empty-state">No cash transactions yet.</td></tr>';
     return;
   }
   const platformLabels={moomoo:'Moomoo',ibkr:'IBKR',webull:'Webull',tiger:'Tiger Brokers',saxo:'Saxo',endowus:'Endowus',syfe:'Syfe',dbs:'DBS Bank',ocbc:'OCBC Bank',uob:'UOB Bank',others:'Others'};
@@ -1690,6 +1712,7 @@ function renderCashHistory(){
     const prefix=t.delta>=0?'+':'';
     const canEdit=!isDemo;
     return`<tr>
+      <td><input type="checkbox" class="bulk-chk-cash" data-id="${t.id}" onchange="onBulkCheck('cash')" style="accent-color:#f0b429;cursor:pointer;"></td>
       <td style="color:#7c8db5;white-space:nowrap">${t.txnDate}</td>
       <td style="font-weight:500;color:#e2e8f0">${label}</td>
       <td class="${sign}" style="font-weight:500">${prefix}SGD ${t.deltaSGD.toFixed(2)}<br><span class="muted" style="font-size:10px;">${prefix}${t.currency} ${Math.abs(t.delta).toFixed(2)}</span></td>
@@ -1743,8 +1766,65 @@ function switchHistTab(tab){
   if(tab==='realized')renderRealizedPnL();
 }
 
+// ── Bulk selection helpers ──
+function getSelectedIds(type){
+  return [...document.querySelectorAll(`.bulk-chk-${type}:checked`)].map(cb=>cb.dataset.id);
+}
+
+function updateBulkBar(type){
+  const bar=document.getElementById(`bulk-bar-${type}`);
+  const countEl=document.getElementById(`bulk-count-${type}`);
+  const selectAll=document.getElementById(`select-all-${type}`);
+  if(!bar)return;
+  const all=[...document.querySelectorAll(`.bulk-chk-${type}`)];
+  const checked=[...document.querySelectorAll(`.bulk-chk-${type}:checked`)];
+  const n=checked.length;
+  bar.style.display=n>0?'flex':'none';
+  if(countEl)countEl.textContent=n+' item'+(n!==1?'s':'')+' selected';
+  if(selectAll){
+    selectAll.indeterminate=n>0&&n<all.length;
+    selectAll.checked=all.length>0&&n===all.length;
+  }
+}
+
+function onBulkCheck(type){updateBulkBar(type);}
+
+function toggleSelectAll(type,checked){
+  document.querySelectorAll(`.bulk-chk-${type}`).forEach(cb=>{cb.checked=checked;});
+  updateBulkBar(type);
+}
+
+function clearBulkSelection(type){
+  document.querySelectorAll(`.bulk-chk-${type}`).forEach(cb=>{cb.checked=false;});
+  const selectAll=document.getElementById(`select-all-${type}`);
+  if(selectAll){selectAll.checked=false;selectAll.indeterminate=false;}
+  updateBulkBar(type);
+}
+
+async function bulkDelete(type){
+  if(isDemo){alert('Create an account to delete entries.');return;}
+  const ids=getSelectedIds(type);
+  if(!ids.length)return;
+  const label=type==='trades'?'trade':(type==='cash'?'cash transaction':'entry');
+  if(!confirm(`Permanently delete ${ids.length} ${label}${ids.length!==1?'s':''}? This cannot be undone.`))return;
+  const tbl=type==='trades'?'trades':'cash_transactions';
+  // Delete in batches to stay within Supabase URL length limits
+  let errors=0;
+  for(const id of ids){
+    const{error}=await db.from(tbl).delete().eq('id',id).eq('user_id',currentUser.id);
+    if(error){console.warn('Bulk delete error:',error.message);errors++;}
+  }
+  if(errors)alert(`${ids.length-errors} deleted. ${errors} failed — check console.`);
+  await loadAll();renderAll();
+  if(type==='trades')renderHistory();
+  if(type==='cash'){renderCashHistory();switchHistTab('cash');}
+}
+
 function renderHistory(){
-  if(!trades.length){document.getElementById('hist-tbody').innerHTML='<tr><td colspan="12" class="empty-state">No trades yet.</td></tr>';return;}
+  const selectAll=document.getElementById('select-all-trades');
+  if(selectAll)selectAll.checked=false;
+  updateBulkBar('trades');
+  if(!trades.length){document.getElementById('hist-tbody').innerHTML='<tr><td colspan="13" class="empty-state">No trades yet.</td></tr>';return;}
   const sorted=[...trades].sort((a,b)=>b.timestamp-a.timestamp);
   document.getElementById('hist-tbody').innerHTML=sorted.map(t=>{
     const net=t.action==='buy'?t.gross+t.totalFees:t.gross-t.totalFees;
@@ -1752,6 +1832,7 @@ function renderHistory(){
     const canEdit=!isDemo;
     const pLabel={ibkr:'IBKR',moomoo:'Moomoo',webull:'Webull',tiger:'Tiger',saxo:'Saxo'}[t.platform]||t.platform;
     return`<tr>
+      <td><input type="checkbox" class="bulk-chk-trades" data-id="${t.id}" onchange="onBulkCheck('trades')" style="accent-color:#f0b429;cursor:pointer;"></td>
       <td style="white-space:nowrap;color:#7c8db5">${t.date} ${t.time}</td>
       <td><span class="badge b-${t.action}">${t.action.toUpperCase()}</span></td>
       <td style="font-weight:500;color:#e2e8f0">${t.symbol}</td>
